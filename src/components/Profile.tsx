@@ -54,9 +54,9 @@ export default function Profile() {
   // For now, we'll just show the current user's profile
   // Later we'll fetch other users' profiles based on the username parameter
   return (
-    <div className="max-w-2xl mx-auto">
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex items-center space-x-4 mb-6">
+    <div className="w-full max-w-4xl mx-auto">
+      <div className="bg-white shadow rounded-lg p-4 sm:p-6">
+        <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
           <div className="relative group">
             <img
               className="h-20 w-20 rounded-full object-cover"
@@ -70,7 +70,7 @@ export default function Profile() {
               <span className="text-white text-sm font-medium">Change Photo</span>
             </button>
           </div>
-          <div className="flex-1">
+          <div className="flex-1 w-full">
             <div className="flex items-center justify-between">
               {isEditingUsername ? (
                 <div className="flex-1 mr-2">
@@ -101,7 +101,7 @@ export default function Profile() {
                 </div>
               ) : (
                 <>
-                  <h2 className="text-2xl font-bold text-gray-900">
+                  <h2 className="text-xl sm:text-2xl font-bold text-gray-900">
                     {user.displayName || 'Add a username'}
                   </h2>
                   <div
@@ -138,7 +138,7 @@ export default function Profile() {
                 placeholder="Tell us about yourself..."
                 maxLength={2000}
               />
-              <div className="mt-2 flex items-center justify-between">
+              <div className="mt-2 flex flex-col sm:flex-row sm:items-center justify-between space-y-2 sm:space-y-0">
                 <span className="text-sm text-gray-500">
                   {bio.length}/2000 characters
                 </span>

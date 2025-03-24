@@ -10,18 +10,15 @@ function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="min-h-screen bg-gray-100">
+        <div className="min-h-screen bg-gray-100 w-full">
           <Navbar />
-          <main className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-            <div className="px-4 py-6 sm:px-0">
-              <Routes>
-                <Route path="/" element={<Feed />} />
-                <Route path="/create" element={<div>Create Post (Coming Soon)</div>} />
-                <Route path="/login" element={<AuthUI />} />
-                <Route path="/signup" element={<AuthUI />} />
-                <Route path="/profile" element={<Profile />} />
-              </Routes>
-            </div>
+          <main className="container mx-auto px-4 py-6 sm:px-6 lg:px-8 min-h-[calc(100vh-64px)]">
+            <Routes>
+              <Route path="/" element={<Feed />} />
+              <Route path="/create" element={<div>Create Post (Coming Soon)</div>} />
+              <Route path="/login" element={<AuthUI />} />
+              <Route path="/profile" element={<Profile />} />
+            </Routes>
           </main>
           <Toaster position="top-right" />
         </div>
