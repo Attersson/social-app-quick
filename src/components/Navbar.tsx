@@ -1,8 +1,18 @@
-import { Link } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 
 export default function Navbar() {
   const { user } = useAuth();
+  const location = useLocation();
+  const isPostsPage = location.pathname === '/';
+  const isProfilePage = location.pathname === '/profile';
+
+  const linkClasses = (isActive: boolean) =>
+    `border-b-2 inline-flex items-center px-1 pt-1 text-sm font-medium h-full ${
+      isActive
+        ? 'border-blue-500 text-gray-900'
+        : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
+    }`;
 
   return (
     <nav className="bg-white shadow">
@@ -18,24 +28,18 @@ export default function Navbar() {
               <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
                 <Link
                   to="/"
-                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
+                  className={linkClasses(isPostsPage)}
                 >
-                  Feed
-                </Link>
-                <Link
-                  to="/create"
-                  className="border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium"
-                >
-                  Create Post
+                  Posts
                 </Link>
               </div>
             )}
           </div>
-          <div className="flex items-center">
+          <div className="flex items-center h-full">
             {user ? (
               <Link
                 to="/profile"
-                className="flex items-center group hover:opacity-80 transition-opacity"
+                className={`${linkClasses(isProfilePage)} flex items-center group hover:opacity-80 transition-opacity`}
               >
                 <img
                   className="h-8 w-8 rounded-full object-cover"

@@ -15,7 +15,6 @@ function App() {
           <main className="container mx-auto px-4 py-6 sm:px-6 lg:px-8 min-h-[calc(100vh-64px)]">
             <Routes>
               <Route path="/" element={<Feed />} />
-              <Route path="/create" element={<div>Create Post (Coming Soon)</div>} />
               <Route path="/login" element={<AuthUI />} />
               <Route path="/profile" element={<Profile />} />
             </Routes>
