@@ -151,8 +151,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await setDoc(doc(db, 'users', result.user.uid), {
       displayName: result.user.displayName,
       email: result.user.email,
-      photoURL: result.user.photoURL,
-      bio: '',
+      photoURL: 'https://i.pravatar.cc/150?img=4'
     }, { merge: true });
     
     await syncUserData(result.user);
