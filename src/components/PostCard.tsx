@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Post } from '../types/Post';
-import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { HeartIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
@@ -21,6 +21,13 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
 
   const isLiked = user ? post.likes.includes(user.uid) : false;
+
+  const getDateFromTimestamp = (timestamp: Date | Timestamp): Date => {
+    if (timestamp instanceof Timestamp) {
+      return timestamp.toDate();
+    }
+    return timestamp;
+  };
 
   const handleLike = async () => {
     if (!user) {
@@ -92,7 +99,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         <div className="flex-1">
           <h3 className="font-semibold text-gray-900">{post.authorName}</h3>
           <p className="text-sm text-gray-500">
-            {formatDistanceToNow(post.createdAt, { addSuffix: true })}
+            {formatDistanceToNow(getDateFromTimestamp(post.createdAt), { addSuffix: true })}
           </p>
         </div>
       </div>
@@ -133,7 +140,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
                   <p className="text-gray-700">{comment.content}</p>
                 </div>
                 <p className="text-xs text-gray-500 mt-1">
-                  {formatDistanceToNow(comment.createdAt, { addSuffix: true })}
+                  {formatDistanceToNow(getDateFromTimestamp(comment.createdAt), { addSuffix: true })}
                 </p>
               </div>
             </div>
