@@ -12,6 +12,18 @@ import {
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
 
+interface UserData {
+  displayName?: string;
+  email?: string;
+  photoURL?: string;
+  bio?: string;
+}
+
+interface AuthUpdates {
+  displayName?: string;
+  photoURL?: string;
+}
+
 interface AuthContextType {
   user: User | null;
   signUp: (email: string, password: string) => Promise<void>;
@@ -38,20 +50,67 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [userBio, setUserBio] = useState('');
   const [loading, setLoading] = useState(true);
 
+  const syncUserData = async (user: User) => {
+    const userDoc = await getDoc(doc(db, 'users', user.uid));
+    if (userDoc.exists()) {
+      const userData = userDoc.data() as UserData;
+      setUserBio(userData.bio || '');
+      
+      // Update Firestore with any new data from Auth
+      const updates: UserData = {};
+      if (user.displayName && user.displayName !== userData.displayName) {
+        updates.displayName = user.displayName;
+      }
+      if (user.photoURL && user.photoURL !== userData.photoURL) {
+        updates.photoURL = user.photoURL;
+      }
+      if (user.email && user.email !== userData.email) {
+        updates.email = user.email;
+      }
+      
+      if (Object.keys(updates).length > 0) {
+        await setDoc(doc(db, 'users', user.uid), updates, { merge: true });
+      }
+      
+      // Update Auth profile with any missing data from Firestore
+      const authUpdates: AuthUpdates = {};
+      if (userData.displayName && userData.displayName !== user.displayName) {
+        authUpdates.displayName = userData.displayName;
+      }
+      if (userData.photoURL && userData.photoURL !== user.photoURL) {
+        authUpdates.photoURL = userData.photoURL;
+      }
+      
+      if (Object.keys(authUpdates).length > 0) {
+        await updateProfile(user, authUpdates);
+        setUser({ ...user, ...authUpdates });
+      }
+    } else {
+      // Create new user document with all available information
+      const userData = {
+        displayName: user.displayName || user.email?.split('@')[0] || 'User',
+        email: user.email,
+        photoURL: user.photoURL,
+        bio: ''
+      };
+      await setDoc(doc(db, 'users', user.uid), userData);
+      setUserBio('');
+      
+      // Ensure display name is set in Auth profile
+      if (!user.displayName) {
+        await updateProfile(user, { displayName: userData.displayName });
+        setUser({ ...user, displayName: userData.displayName });
+      }
+    }
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (user) => {
-      setUser(user);
       if (user) {
-        // Fetch user's bio from Firestore
-        const userDoc = await getDoc(doc(db, 'users', user.uid));
-        if (userDoc.exists()) {
-          setUserBio(userDoc.data().bio || '');
-        } else {
-          // Create user document if it doesn't exist
-          await setDoc(doc(db, 'users', user.uid), { bio: '' });
-          setUserBio('');
-        }
+        await syncUserData(user);
+        setUser(user);
       } else {
+        setUser(null);
         setUserBio('');
       }
       setLoading(false);
@@ -62,25 +121,42 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const signUp = async (email: string, password: string) => {
     const result = await createUserWithEmailAndPassword(auth, email, password);
-    setUser(result.user);
+    const initialDisplayName = email.split('@')[0];
+    
+    // Set display name in Auth profile
+    await updateProfile(result.user, { displayName: initialDisplayName });
+    
     // Create user document in Firestore
-    await setDoc(doc(db, 'users', result.user.uid), { bio: '' });
+    await setDoc(doc(db, 'users', result.user.uid), {
+      displayName: initialDisplayName,
+      email: result.user.email,
+      photoURL: result.user.photoURL,
+      bio: '',
+    });
+    
+    setUser({ ...result.user, displayName: initialDisplayName });
   };
 
   const signIn = async (email: string, password: string) => {
     const result = await signInWithEmailAndPassword(auth, email, password);
+    await syncUserData(result.user);
     setUser(result.user);
   };
 
   const signInWithGoogle = async () => {
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
+    
+    // Create or update user document in Firestore
+    await setDoc(doc(db, 'users', result.user.uid), {
+      displayName: result.user.displayName,
+      email: result.user.email,
+      photoURL: result.user.photoURL,
+      bio: '',
+    }, { merge: true });
+    
+    await syncUserData(result.user);
     setUser(result.user);
-    // Create user document in Firestore if it doesn't exist
-    const userDoc = await getDoc(doc(db, 'users', result.user.uid));
-    if (!userDoc.exists()) {
-      await setDoc(doc(db, 'users', result.user.uid), { bio: '' });
-    }
   };
 
   const logout = async () => {
@@ -91,7 +167,15 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
   const updateUsername = async (username: string) => {
     if (!user) throw new Error('No user logged in');
+    
+    // Update Auth profile
     await updateProfile(user, { displayName: username });
+    
+    // Update Firestore
+    await setDoc(doc(db, 'users', user.uid), {
+      displayName: username
+    }, { merge: true });
+    
     setUser({ ...user, displayName: username });
   };
 

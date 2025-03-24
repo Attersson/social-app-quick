@@ -25,7 +25,7 @@ export default function PostForm({ onPostCreated }: { onPostCreated?: () => void
         content: trimmedContent,
         authorId: user.uid,
         authorName: user.displayName || 'Anonymous',
-        authorPhotoURL: user.photoURL,
+        authorPhotoURL: 'https://i.pravatar.cc/150?img=4',
         createdAt: serverTimestamp(),
         likes: [],
         comments: []

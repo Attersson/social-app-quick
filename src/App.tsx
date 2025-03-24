@@ -5,6 +5,8 @@ import Navbar from './components/Navbar';
 import AuthUI from './components/AuthUI';
 import Feed from './components/Feed';
 import Profile from './components/Profile';
+import UsersList from './components/UsersList';
+import UserProfile from './components/UserProfile';
 
 function App() {
   return (
@@ -17,6 +19,8 @@ function App() {
               <Route path="/" element={<Feed />} />
               <Route path="/login" element={<AuthUI />} />
               <Route path="/profile" element={<Profile />} />
+              <Route path="/users" element={<UsersList />} />
+              <Route path="/users/:userId" element={<UserProfile />} />
             </Routes>
           </main>
           <Toaster position="top-right" />

@@ -73,7 +73,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           content: trimmedComment,
           authorId: user.uid,
           authorName: user.displayName || 'Anonymous',
-          authorPhotoURL: user.photoURL,
+          authorPhotoURL: 'https://i.pravatar.cc/150?img=4',
           createdAt: now
         })
       });
@@ -92,7 +92,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     <div className="bg-white shadow rounded-lg p-4 mb-4">
       <div className="flex items-start space-x-3 mb-4">
         <img
-          src={post.authorPhotoURL || 'https://i.pravatar.cc/40'}
+          src="https://i.pravatar.cc/150?img=4"
           alt={post.authorName}
           className="w-10 h-10 rounded-full"
         />
@@ -130,7 +130,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           {post.comments.map((comment) => (
             <div key={comment.id} className="flex items-start space-x-3 mb-4">
               <img
-                src={comment.authorPhotoURL || 'https://i.pravatar.cc/32'}
+                src="https://i.pravatar.cc/150?img=4"
                 alt={comment.authorName}
                 className="w-8 h-8 rounded-full"
               />

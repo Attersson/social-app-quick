@@ -5,6 +5,7 @@ export default function Navbar() {
   const { user } = useAuth();
   const location = useLocation();
   const isPostsPage = location.pathname === '/';
+  const isUsersPage = location.pathname.startsWith('/users');
   const isProfilePage = location.pathname === '/profile';
 
   const linkClasses = (isActive: boolean) =>
@@ -31,6 +32,12 @@ export default function Navbar() {
                   className={linkClasses(isPostsPage)}
                 >
                   Posts
+                </Link>
+                <Link
+                  to="/users"
+                  className={linkClasses(isUsersPage)}
+                >
+                  Users
                 </Link>
               </div>
             )}
