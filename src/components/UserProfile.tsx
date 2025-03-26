@@ -5,6 +5,7 @@ import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
 import { FollowButton } from './FollowButton';
 import { neo4jService } from '../services/neo4j';
+import UserPosts from './UserPosts';
 
 interface User {
   id: string;
@@ -59,7 +60,7 @@ export default function UserProfile() {
     );
   }
 
-  if (!user) {
+  if (!user || !userId) {
     return (
       <div className="text-center py-8">
         <h2 className="text-xl font-semibold text-gray-900">User not found</h2>
@@ -69,41 +70,35 @@ export default function UserProfile() {
   }
 
   return (
-    <div className="w-full max-w-4xl mx-auto">
-      <div className="bg-white shadow rounded-lg p-6">
-        <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
-          <div className="relative">
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <div className="bg-white shadow rounded-lg p-6 mb-8">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center space-x-4">
             <img
-              className="h-20 w-20 rounded-full object-cover"
               src={user.photoURL || 'https://i.pravatar.cc/150?img=4'}
-              alt={user.displayName || 'User avatar'}
+              alt={user.displayName}
+              className="w-20 h-20 rounded-full"
             />
-          </div>
-          
-          <div className="text-center sm:text-left flex-1">
-            <div className="flex items-center justify-between">
-              <div>
-                <h2 className="text-2xl font-bold text-gray-900">
-                  {user.displayName || 'Anonymous'}
-                </h2>
-                <p className="text-gray-600">{user.email}</p>
-                <p className="text-sm text-gray-500 mt-1">
-                  {user.followersCount} followers
-                </p>
-              </div>
-              {currentUser && userId && currentUser.uid !== userId && (
-                <FollowButton userId={userId} />
-              )}
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">{user.displayName}</h1>
+              <p className="text-gray-600">{user.email}</p>
+              <p className="text-sm text-gray-500">{user.followersCount} followers</p>
             </div>
           </div>
+          {currentUser && currentUser.uid !== userId && (
+            <FollowButton userId={userId} />
+          )}
         </div>
+        {user.bio && (
+          <div className="mt-4">
+            <p className="text-gray-700">{user.bio}</p>
+          </div>
+        )}
+      </div>
 
-        <div className="border-t border-gray-200 pt-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Bio</h3>
-          <p className="text-gray-600 whitespace-pre-wrap">
-            {user.bio || 'No bio available.'}
-          </p>
-        </div>
+      <div className="mt-8">
+        <h2 className="text-xl font-semibold text-gray-900 mb-4">Posts</h2>
+        <UserPosts userId={userId} />
       </div>
     </div>
   );
