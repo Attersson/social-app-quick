@@ -140,7 +140,7 @@ class Neo4jService {
         'MATCH (u:User {id: $userId})<-[r:FOLLOWS]-(follower:User) ' +
         'RETURN follower.id as id, follower.displayName as displayName, r.createdAt as followedAt ' +
         'ORDER BY r.createdAt DESC ' +
-        'SKIP $skip LIMIT $limit',
+        'SKIP toInteger($skip) LIMIT toInteger($limit)',
         { userId, skip, limit }
       );
       return result.records.map((record: Record) => ({
@@ -161,7 +161,7 @@ class Neo4jService {
         'MATCH (u:User {id: $userId})-[r:FOLLOWS]->(following:User) ' +
         'RETURN following.id as id, following.displayName as displayName, r.createdAt as followedAt ' +
         'ORDER BY r.createdAt DESC ' +
-        'SKIP $skip LIMIT $limit',
+        'SKIP toInteger($skip) LIMIT toInteger($limit)',
         { userId, skip, limit }
       );
       return result.records.map((record: Record) => ({
@@ -184,6 +184,30 @@ class Neo4jService {
         { followerId, followingId }
       );
       return result.records[0].get('isFollowing');
+    } finally {
+      await session.close();
+    }
+  }
+
+  async getFriendsOfFriends(userId: string) {
+    const session = this.driver.session();
+    try {
+      const result = await session.run(
+        `
+        MATCH (user:User {id: $userId})-[:FOLLOWS]->(friend:User)-[:FOLLOWS]->(fof:User)
+        WHERE NOT (user)-[:FOLLOWS]->(fof)
+        AND fof.id <> $userId
+        WITH fof, COUNT(DISTINCT friend) as mutualFriends
+        RETURN fof.id as id, mutualFriends
+        ORDER BY mutualFriends DESC
+        LIMIT 10
+        `,
+        { userId }
+      );
+      return result.records.map(record => ({
+        id: record.get('id'),
+        mutualFriends: record.get('mutualFriends').toNumber()
+      }));
     } finally {
       await session.close();
     }

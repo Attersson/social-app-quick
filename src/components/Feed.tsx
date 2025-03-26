@@ -7,6 +7,7 @@ import { neo4jService } from '../services/neo4j';
 import PostForm from './PostForm';
 import PostCard from './PostCard';
 import Breadcrumb from './Breadcrumb';
+import FollowRecommendations from './FollowRecommendations';
 
 interface FirestoreComment extends Omit<Comment, 'createdAt'> {
   createdAt: Timestamp;
@@ -84,26 +85,40 @@ export default function Feed() {
     <div className="w-full max-w-4xl mx-auto">
       <Breadcrumb items={[{ label: 'Feed' }]} />
       
-      {user && <PostForm onPostCreated={handlePostUpdate} />}
-      
-      {loading ? (
-        <div className="text-center py-8">
-          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
-          <p className="mt-2 text-gray-600">Loading posts...</p>
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="lg:col-span-2 space-y-6">
+          {user && <PostForm onPostCreated={handlePostUpdate} />}
+          
+          <div className="block lg:hidden">
+            {user && <FollowRecommendations />}
+          </div>
+          
+          {loading ? (
+            <div className="text-center py-8">
+              <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-500 border-r-transparent"></div>
+              <p className="mt-2 text-gray-600">Loading posts...</p>
+            </div>
+          ) : posts.length > 0 ? (
+            <div className="space-y-4">
+              {posts.map(post => (
+                <PostCard key={post.id} post={post} onUpdate={handlePostUpdate} />
+              ))}
+            </div>
+          ) : (
+            <div className="bg-white shadow rounded-lg p-6 text-center">
+              <p className="text-gray-600">
+                {user 
+                  ? "No posts from followed users yet. Follow some users to see their posts!" 
+                  : "Sign in to see posts from the community."}
+              </p>
+            </div>
+          )}
         </div>
-      ) : posts.length > 0 ? (
-        posts.map(post => (
-          <PostCard key={post.id} post={post} onUpdate={handlePostUpdate} />
-        ))
-      ) : (
-        <div className="bg-white shadow rounded-lg p-6 text-center">
-          <p className="text-gray-600">
-            {user 
-              ? "No posts from followed users yet. Follow some users to see their posts!" 
-              : "Sign in to see posts from the community."}
-          </p>
+        
+        <div className="hidden lg:block lg:col-span-1">
+          {user && <FollowRecommendations />}
         </div>
-      )}
+      </div>
     </div>
   );
 } 
