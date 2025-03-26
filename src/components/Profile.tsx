@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { Navigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { PencilIcon } from '@heroicons/react/24/solid';
+import Breadcrumb from './Breadcrumb';
 
 export default function Profile() {
   const { user, logout, updateUsername, updateBio, userBio } = useAuth();
@@ -55,6 +56,8 @@ export default function Profile() {
   // Later we'll fetch other users' profiles based on the username parameter
   return (
     <div className="w-full max-w-4xl mx-auto">
+      <Breadcrumb items={[{ label: 'Profile' }]} />
+      
       <div className="bg-white shadow rounded-lg p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row items-center sm:items-start space-y-4 sm:space-y-0 sm:space-x-4 mb-6">
           <div className="relative group">
@@ -70,7 +73,8 @@ export default function Profile() {
               <span className="text-white text-sm font-medium">Change Photo</span>
             </button>
           </div>
-          <div className="flex-1 w-full">
+          
+          <div className="flex-1">
             <div className="flex items-center justify-between">
               {isEditingUsername ? (
                 <div className="flex-1 mr-2">
@@ -129,6 +133,7 @@ export default function Profile() {
               </div>
             )}
           </div>
+          
           {isEditingBio ? (
             <div>
               <textarea
@@ -168,7 +173,7 @@ export default function Profile() {
           )}
         </div>
 
-        <div className="border-t border-gray-200 pt-6 mt-6">
+        <div className="mt-6">
           <button
             onClick={logout}
             className="w-full bg-red-500 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500"
