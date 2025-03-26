@@ -10,7 +10,7 @@ export default function Navbar() {
   const isProfilePage = location.pathname === '/profile';
 
   const linkClasses = (isActive: boolean) =>
-    `border-b-2 inline-flex items-center px-1 pt-1 text-sm font-medium h-full ${
+    `inline-flex items-center px-3 h-16 border-b-2 text-sm font-medium ${
       isActive
         ? 'border-blue-500 text-gray-900'
         : 'border-transparent text-gray-500 hover:border-gray-300 hover:text-gray-700'
@@ -19,15 +19,15 @@ export default function Navbar() {
   return (
     <nav className="bg-white shadow">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
+        <div className="flex justify-between">
           <div className="flex">
-            <div className="flex-shrink-0 flex items-center">
+            <div className="flex items-center">
               <Link to="/" className="text-2xl font-bold text-gray-900">
                 Quick Social App
               </Link>
             </div>
             {user && (
-              <div className="hidden sm:ml-6 sm:flex sm:space-x-8">
+              <div className="hidden sm:ml-6 sm:flex">
                 <Link
                   to="/"
                   className={linkClasses(isPostsPage)}
@@ -43,20 +43,20 @@ export default function Navbar() {
               </div>
             )}
           </div>
-          <div className="flex items-center h-full">
+          <div className="flex items-center">
             {user ? (
               <div className="flex items-center space-x-4">
                 <NotificationsList />
                 <Link
                   to="/profile"
-                  className={`${linkClasses(isProfilePage)} flex items-center group hover:opacity-80 transition-opacity`}
+                  className={`${linkClasses(isProfilePage)} group hover:opacity-80 transition-opacity`}
                 >
                   <img
                     className="h-8 w-8 rounded-full object-cover"
                     src="https://i.pravatar.cc/150?img=4"
                     alt={user.displayName || 'User avatar'}
                   />
-                  <span className="ml-2 text-sm text-gray-700 group-hover:text-gray-900">
+                  <span className="ml-2 text-gray-700 group-hover:text-gray-900">
                     {user.displayName || user.email}
                   </span>
                 </Link>
