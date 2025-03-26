@@ -72,6 +72,7 @@ export default function NotificationsList() {
                           <p className="text-sm text-gray-900">
                             <span className="font-medium">{notification.actorName}</span>
                             {notification.type === 'follow' && ' started following you'}
+                            {notification.type === 'unfollow' && ' unfollowed you'}
                           </p>
                           <p className="text-xs text-gray-500">
                             {formatDistanceToNow(notification.createdAt instanceof Timestamp ? notification.createdAt.toDate() : notification.createdAt, { addSuffix: true })}

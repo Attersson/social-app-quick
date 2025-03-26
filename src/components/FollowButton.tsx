@@ -47,6 +47,14 @@ export function FollowButton({ userId, className = '' }: FollowButtonProps) {
         await neo4jService.unfollowUser(user.uid, userId);
         setIsFollowing(false);
         toast.success('User unfollowed');
+
+        // Create notification for the unfollowed user
+        await addNotification({
+          userId,
+          type: 'unfollow',
+          actorId: user.uid,
+          actorName: user.displayName || 'Anonymous'
+        });
       } else {
         await neo4jService.followUser(user.uid, userId);
         setIsFollowing(true);
