@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationsContext';
 import { Post } from '../types/Post';
 import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
@@ -18,6 +19,7 @@ interface PostCardProps {
 
 export default function PostCard({ post, onUpdate }: PostCardProps) {
   const { user } = useAuth();
+  const { addNotification } = useNotifications();
   const [isLiking, setIsLiking] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState('');
@@ -58,8 +60,9 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     }
 
     setIsLiking(true);
-    // Optimistically update the likes
+    // Store the previous state for potential rollback
     const wasLiked = optimisticLikes.includes(user.uid);
+    // Optimistically update the likes
     setOptimisticLikes(wasLiked 
       ? optimisticLikes.filter(id => id !== user.uid)
       : [...optimisticLikes, user.uid]
@@ -70,6 +73,20 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       await updateDoc(postRef, {
         likes: wasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
       });
+
+      // Only send notification if the post author is not the current user
+      if (post.authorId !== user.uid) {
+        // Create notification for the post author
+        await addNotification({
+          userId: post.authorId,
+          type: wasLiked ? 'unlike' : 'like',
+          actorId: user.uid,
+          actorName: user.displayName || 'Anonymous',
+          postId: post.id,
+          postContent: post.content.substring(0, 50) + (post.content.length > 50 ? '...' : '') // Include a preview of the post content
+        });
+      }
+
       onUpdate();
     } catch (error) {
       // Revert optimistic update on error

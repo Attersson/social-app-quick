@@ -5,12 +5,50 @@ import { Link } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { formatDistanceToNow } from 'date-fns';
 import { Timestamp } from 'firebase/firestore';
+import { Notification } from '../types/Notification';
 
 export default function NotificationsList() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
 
   const handleNotificationClick = async (notificationId: string) => {
     await markAsRead(notificationId);
+  };
+
+  const renderNotificationContent = (notification: Notification) => {
+    const actorName = <span className="font-medium">{notification.actorName}</span>;
+    
+    switch (notification.type) {
+      case 'follow':
+        return <>{actorName} started following you</>;
+      case 'unfollow':
+        return <>{actorName} unfollowed you</>;
+      case 'like':
+        return (
+          <>
+            {actorName} liked your post:{' '}
+            <Link 
+              to={`/posts/${notification.postId}`} 
+              className="text-gray-600 hover:text-gray-900 block mt-1 text-sm"
+            >
+              "{notification.postContent}"
+            </Link>
+          </>
+        );
+      case 'unlike':
+        return (
+          <>
+            {actorName} removed their like from your post:{' '}
+            <Link 
+              to={`/posts/${notification.postId}`} 
+              className="text-gray-600 hover:text-gray-900 block mt-1 text-sm"
+            >
+              "{notification.postContent}"
+            </Link>
+          </>
+        );
+      default:
+        return <>{actorName} interacted with your profile</>;
+    }
   };
 
   return (
@@ -35,7 +73,7 @@ export default function NotificationsList() {
         leaveFrom="transform opacity-100 scale-100"
         leaveTo="transform opacity-0 scale-95"
       >
-        <Menu.Items className="absolute right-0 mt-2 w-80 origin-top-right bg-white divide-y divide-gray-100 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
+        <Menu.Items className="absolute right-0 mt-2 w-96 origin-top-right bg-white divide-y divide-gray-100 rounded-md shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none">
           <div className="px-4 py-3 flex items-center justify-between">
             <h3 className="text-sm font-medium text-gray-900">Notifications</h3>
             {unreadCount > 0 && (
@@ -53,8 +91,7 @@ export default function NotificationsList() {
               notifications.map((notification) => (
                 <Menu.Item key={notification.id}>
                   {({ active }) => (
-                    <Link
-                      to={`/users/${notification.actorId}`}
+                    <div
                       className={`${
                         active ? 'bg-gray-100' : ''
                       } ${
@@ -63,23 +100,23 @@ export default function NotificationsList() {
                       onClick={() => handleNotificationClick(notification.id)}
                     >
                       <div className="flex items-start">
-                        <img
-                          src="https://i.pravatar.cc/150?img=4"
-                          alt={notification.actorName}
-                          className="h-8 w-8 rounded-full"
-                        />
+                        <Link to={`/users/${notification.actorId}`}>
+                          <img
+                            src="https://i.pravatar.cc/150?img=4"
+                            alt={notification.actorName}
+                            className="h-8 w-8 rounded-full hover:opacity-80 transition-opacity"
+                          />
+                        </Link>
                         <div className="ml-3 flex-1">
                           <p className="text-sm text-gray-900">
-                            <span className="font-medium">{notification.actorName}</span>
-                            {notification.type === 'follow' && ' started following you'}
-                            {notification.type === 'unfollow' && ' unfollowed you'}
+                            {renderNotificationContent(notification)}
                           </p>
-                          <p className="text-xs text-gray-500">
+                          <p className="text-xs text-gray-500 mt-1">
                             {formatDistanceToNow(notification.createdAt instanceof Timestamp ? notification.createdAt.toDate() : notification.createdAt, { addSuffix: true })}
                           </p>
                         </div>
                       </div>
-                    </Link>
+                    </div>
                   )}
                 </Menu.Item>
               ))
