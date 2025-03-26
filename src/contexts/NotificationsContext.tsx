@@ -9,11 +9,14 @@ import {
   onSnapshot,
   doc,
   updateDoc,
-  Timestamp,
   addDoc,
-  serverTimestamp
+  serverTimestamp,
+  getDocs,
+  FirestoreError
 } from 'firebase/firestore';
+import { FirebaseError } from 'firebase/app';
 import { db } from '../config/firebase';
+import toast from 'react-hot-toast';
 
 interface NotificationsContextType {
   notifications: Notification[];
@@ -35,24 +38,63 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
       return;
     }
 
-    // Subscribe to notifications in real-time
-    const q = query(
-      collection(db, 'notifications'),
-      where('userId', '==', user.uid),
-      orderBy('createdAt', 'desc')
-    );
+    let unsubscribe: (() => void) | undefined;
 
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const newNotifications = snapshot.docs.map(doc => ({
-        id: doc.id,
-        ...doc.data(),
-        createdAt: doc.data().createdAt?.toDate() || new Date()
-      })) as Notification[];
-      
-      setNotifications(newNotifications);
-    });
+    const setupNotifications = async () => {
+      try {
+        // First try to get cached data
+        const q = query(
+          collection(db, 'notifications'),
+          where('userId', '==', user.uid),
+          orderBy('createdAt', 'desc')
+        );
 
-    return () => unsubscribe();
+        // Get initial data
+        const initialSnapshot = await getDocs(q);
+        const initialNotifications = initialSnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data(),
+          createdAt: doc.data().createdAt?.toDate() || new Date()
+        })) as Notification[];
+        
+        setNotifications(initialNotifications);
+
+        // Then set up real-time listener
+        unsubscribe = onSnapshot(
+          q,
+          {
+            next: (snapshot) => {
+              const newNotifications = snapshot.docs.map(doc => ({
+                id: doc.id,
+                ...doc.data(),
+                createdAt: doc.data().createdAt?.toDate() || new Date()
+              })) as Notification[];
+              
+              setNotifications(newNotifications);
+            },
+            error: (error: FirestoreError) => {
+              console.error('Notifications listener error:', error);
+              if (error.code === 'unavailable') {
+                toast.error('You are offline. Some features may be limited.');
+              } else {
+                toast.error('Error loading notifications');
+              }
+            }
+          }
+        );
+      } catch (error) {
+        console.error('Error setting up notifications:', error);
+        toast.error('Error loading notifications');
+      }
+    };
+
+    setupNotifications();
+
+    return () => {
+      if (unsubscribe) {
+        unsubscribe();
+      }
+    };
   }, [user]);
 
   const unreadCount = notifications.filter(n => !n.read).length;
@@ -60,33 +102,72 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
   const markAsRead = async (notificationId: string) => {
     if (!user) return;
     
-    const notificationRef = doc(db, 'notifications', notificationId);
-    await updateDoc(notificationRef, {
-      read: true
-    });
+    try {
+      const notificationRef = doc(db, 'notifications', notificationId);
+      await updateDoc(notificationRef, {
+        read: true
+      });
+      
+      // Optimistically update the UI
+      setNotifications(prev => 
+        prev.map(n => 
+          n.id === notificationId 
+            ? { ...n, read: true }
+            : n
+        )
+      );
+    } catch (error) {
+      console.error('Error marking notification as read:', error);
+      toast.error('Failed to mark notification as read');
+    }
   };
 
   const markAllAsRead = async () => {
     if (!user) return;
 
-    const unreadNotifications = notifications.filter(n => !n.read);
-    const updatePromises = unreadNotifications.map(notification =>
-      updateDoc(doc(db, 'notifications', notification.id), {
-        read: true
-      })
-    );
+    try {
+      const unreadNotifications = notifications.filter(n => !n.read);
+      
+      // Optimistically update the UI
+      setNotifications(prev => 
+        prev.map(n => ({ ...n, read: true }))
+      );
 
-    await Promise.all(updatePromises);
+      const updatePromises = unreadNotifications.map(notification =>
+        updateDoc(doc(db, 'notifications', notification.id), {
+          read: true
+        })
+      );
+
+      await Promise.all(updatePromises);
+    } catch (error) {
+      console.error('Error marking all notifications as read:', error);
+      toast.error('Failed to mark all notifications as read');
+      
+      // Revert optimistic update on error
+      setNotifications(prev => 
+        prev.map(n => ({ ...n }))
+      );
+    }
   };
 
   const addNotification = async (notification: Omit<Notification, 'id' | 'createdAt' | 'read'>) => {
     if (!user) return;
 
-    await addDoc(collection(db, 'notifications'), {
-      ...notification,
-      read: false,
-      createdAt: serverTimestamp()
-    });
+    try {
+      await addDoc(collection(db, 'notifications'), {
+        ...notification,
+        read: false,
+        createdAt: serverTimestamp()
+      });
+    } catch (error) {
+      console.error('Error adding notification:', error);
+      if (error instanceof FirebaseError && error.code === 'unavailable') {
+        toast.error('You are offline. The notification will be sent when you reconnect.');
+      } else {
+        toast.error('Failed to create notification');
+      }
+    }
   };
 
   return (

@@ -65,12 +65,14 @@ export const UsersList = () => {
                 key={user.id}
                 className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
               >
-                <Link to={`/users/${user.id}`} className="flex items-center space-x-4">
-                  <img
-                    src={user.photoURL || 'https://i.pravatar.cc/150?img=4'}
-                    alt={user.displayName || 'User avatar'}
-                    className="w-12 h-12 rounded-full"
-                  />
+                <div className="flex items-center space-x-4">
+                  <Link to={`/users/${user.id}`}>
+                    <img
+                      src={user.photoURL || 'https://i.pravatar.cc/150?img=4'}
+                      alt={user.displayName || 'User avatar'}
+                      className="w-12 h-12 rounded-full"
+                    />
+                  </Link>
                   <div>
                     <div className="flex items-center space-x-2">
                       <Link
@@ -83,7 +85,7 @@ export const UsersList = () => {
                     </div>
                     <p className="text-sm text-gray-500">{user.email}</p>
                   </div>
-                </Link>
+                </div>
                 <FollowButton userId={user.id} />
               </div>
             ))}

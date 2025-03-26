@@ -1,9 +1,9 @@
 import neo4j, { Driver, Session, Record } from 'neo4j-driver';
 
 // Neo4j connection configuration
-const NEO4J_URI = import.meta.env.VITE_NEO4J_URI || 'bolt://localhost:7687';
-const NEO4J_USER = import.meta.env.VITE_NEO4J_USER || 'neo4j';
-const NEO4J_PASSWORD = import.meta.env.VITE_NEO4J_PASSWORD || 'password';
+const NEO4J_URI = import.meta.env.VITE_NEO4J_URI;
+const NEO4J_USER = import.meta.env.VITE_NEO4J_USER;
+const NEO4J_PASSWORD = import.meta.env.VITE_NEO4J_PASSWORD;
 
 interface Follower {
   id: string;
@@ -12,35 +12,70 @@ interface Follower {
 }
 
 class Neo4jService {
-  private driver: Driver;
+  private driver: Driver | null = null;
+  private connectionPromise: Promise<void> | null = null;
 
   constructor() {
-    // Configure the driver with connection pool settings
-    this.driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD), {
-      maxConnectionPoolSize: 50,
-      connectionTimeout: 30000 // 30 seconds
+    this.initializeDriver().catch(error => {
+      console.error('Failed to initialize Neo4j driver in constructor:', error);
     });
+  }
 
-    // Verify connectivity
-    this.verifyConnectivity();
+  private async initializeDriver() {
+    if (!this.connectionPromise) {
+      this.connectionPromise = new Promise((resolve, reject) => {
+        try {
+          // Configure the driver with connection pool settings
+          this.driver = neo4j.driver(NEO4J_URI, neo4j.auth.basic(NEO4J_USER, NEO4J_PASSWORD), {
+            maxConnectionPoolSize: 50,
+            connectionTimeout: 30000 // 30 seconds
+          });
+
+          // Verify connectivity
+          this.driver.verifyConnectivity().then(() => {
+            console.log('Successfully connected to Neo4j');
+            resolve();
+          }).catch((error) => {
+            console.error('Failed to connect to Neo4j:', error);
+            this.driver = null;
+            this.connectionPromise = null;
+            reject(error);
+          });
+        } catch (error) {
+          console.error('Failed to initialize Neo4j driver:', error);
+          this.driver = null;
+          this.connectionPromise = null;
+          reject(error);
+        }
+      });
+    }
+    return this.connectionPromise;
   }
 
   private async verifyConnectivity() {
-    try {
-      await this.driver.verifyConnectivity();
-      console.log('Successfully connected to Neo4j');
-    } catch (error) {
-      console.error('Failed to connect to Neo4j:', error);
-      throw error;
+    const driver = this.driver;
+    if (!driver) {
+      throw new Error('Neo4j driver not initialized');
     }
+    await driver.verifyConnectivity();
   }
 
   async close() {
-    await this.driver.close();
+    const driver = this.driver;
+    if (driver) {
+      await driver.close();
+      this.driver = null;
+      this.connectionPromise = null;
+    }
   }
 
   private async getSession(): Promise<Session> {
-    return this.driver.session();
+    await this.initializeDriver();
+    const driver = this.driver;
+    if (!driver) {
+      throw new Error('Failed to initialize Neo4j driver');
+    }
+    return driver.session();
   }
 
   // Create a user node in Neo4j
@@ -190,7 +225,7 @@ class Neo4jService {
   }
 
   async getFriendsOfFriends(userId: string) {
-    const session = this.driver.session();
+    const session = await this.getSession();
     try {
       const result = await session.run(
         `
@@ -214,7 +249,7 @@ class Neo4jService {
   }
 
   async isMutualFollow(userId: string, otherUserId: string): Promise<boolean> {
-    const session = this.driver.session();
+    const session = await this.getSession();
     try {
       const result = await session.run(
         `
