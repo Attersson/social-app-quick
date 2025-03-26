@@ -14,6 +14,7 @@ export function FollowButton({ userId, className = '' }: FollowButtonProps) {
   const { addNotification } = useNotifications();
   const [isFollowing, setIsFollowing] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [isUpdating, setIsUpdating] = useState(false);
 
   useEffect(() => {
     const checkFollowStatus = async () => {
@@ -41,11 +42,15 @@ export function FollowButton({ userId, className = '' }: FollowButtonProps) {
       return;
     }
 
-    setIsLoading(true);
+    setIsUpdating(true);
+    // Store the previous state for potential rollback
+    const wasFollowing = isFollowing;
+    // Optimistically update the UI
+    setIsFollowing(!wasFollowing);
+
     try {
-      if (isFollowing) {
+      if (wasFollowing) {
         await neo4jService.unfollowUser(user.uid, userId);
-        setIsFollowing(false);
         toast.success('User unfollowed');
 
         // Create notification for the unfollowed user
@@ -57,7 +62,6 @@ export function FollowButton({ userId, className = '' }: FollowButtonProps) {
         });
       } else {
         await neo4jService.followUser(user.uid, userId);
-        setIsFollowing(true);
         toast.success('User followed');
 
         // Create notification for the followed user
@@ -69,10 +73,12 @@ export function FollowButton({ userId, className = '' }: FollowButtonProps) {
         });
       }
     } catch (error) {
+      // Revert optimistic update on error
+      setIsFollowing(wasFollowing);
       console.error('Error following/unfollowing user:', error);
       toast.error('Failed to update follow status');
     } finally {
-      setIsLoading(false);
+      setIsUpdating(false);
     }
   };
 
@@ -83,14 +89,14 @@ export function FollowButton({ userId, className = '' }: FollowButtonProps) {
   return (
     <button
       onClick={handleFollow}
-      disabled={isLoading}
+      disabled={isLoading || isUpdating}
       className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${
         isFollowing
           ? 'bg-gray-200 text-gray-700 hover:bg-gray-300'
           : 'bg-blue-500 text-white hover:bg-blue-600'
       } disabled:opacity-50 disabled:cursor-not-allowed ${className}`}
     >
-      {isLoading ? 'Loading...' : isFollowing ? 'Unfollow' : 'Follow'}
+      {isLoading ? 'Loading...' : isUpdating ? (isFollowing ? 'Unfollowing...' : 'Following...') : isFollowing ? 'Unfollow' : 'Follow'}
     </button>
   );
 } 
