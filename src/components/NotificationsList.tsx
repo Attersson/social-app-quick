@@ -4,6 +4,7 @@ import { BellIcon } from '@heroicons/react/24/outline';
 import { Link } from 'react-router-dom';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { formatDistanceToNow } from 'date-fns';
+import { Timestamp } from 'firebase/firestore';
 
 export default function NotificationsList() {
   const { notifications, unreadCount, markAsRead, markAllAsRead } = useNotifications();
@@ -73,7 +74,7 @@ export default function NotificationsList() {
                             {notification.type === 'follow' && ' started following you'}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {formatDistanceToNow(notification.createdAt, { addSuffix: true })}
+                            {formatDistanceToNow(notification.createdAt instanceof Timestamp ? notification.createdAt.toDate() : notification.createdAt, { addSuffix: true })}
                           </p>
                         </div>
                       </div>

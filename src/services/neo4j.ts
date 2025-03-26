@@ -52,14 +52,6 @@ class Neo4jService {
     return this.connectionPromise;
   }
 
-  private async verifyConnectivity() {
-    const driver = this.driver;
-    if (!driver) {
-      throw new Error('Neo4j driver not initialized');
-    }
-    await driver.verifyConnectivity();
-  }
-
   async close() {
     const driver = this.driver;
     if (driver) {
