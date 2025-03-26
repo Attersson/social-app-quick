@@ -95,7 +95,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       <div className="flex items-start space-x-3 mb-4">
         <Link to={`/users/${post.authorId}`} className="flex-shrink-0">
           <img
-            src={post.authorPhotoURL || 'https://i.pravatar.cc/150?img=4'}
+            src={'https://i.pravatar.cc/150?img=4'}
             alt={post.authorName}
             className="w-10 h-10 rounded-full hover:opacity-80 transition-opacity"
           />
@@ -143,7 +143,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
             <div key={comment.id} className="flex items-start space-x-3 mb-4">
               <Link to={`/users/${comment.authorId}`} className="flex-shrink-0">
                 <img
-                  src={comment.authorPhotoURL || 'https://i.pravatar.cc/150?img=4'}
+                  src={'https://i.pravatar.cc/150?img=4'}
                   alt={comment.authorName}
                   className="w-8 h-8 rounded-full hover:opacity-80 transition-opacity"
                 />
