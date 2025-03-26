@@ -1,54 +1,143 @@
-# React + TypeScript + Vite
+# Social App Quick
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+A modern social media application built with React, Firebase, and Neo4j. Features include user authentication, posts, comments, and a following system.
 
-Currently, two official plugins are available:
+## Features
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react/README.md) uses [Babel](https://babeljs.io/) for Fast Refresh
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react-swc) uses [SWC](https://swc.rs/) for Fast Refresh
+- 🔐 User Authentication (Email/Password & Google Sign-in)
+- 📝 Create and view posts
+- 💬 Comment on posts
+- 👥 Follow/unfollow users
+- 👤 User profiles with bios
+- 🎨 Modern UI with Tailwind CSS
+- ⚡ Real-time updates
+- 🔄 Infinite scroll feed
 
-## Expanding the ESLint configuration
+## Tech Stack
 
-If you are developing a production application, we recommend updating the configuration to enable type-aware lint rules:
+- **Frontend**: React + TypeScript + Vite
+- **Authentication**: Firebase Auth
+- **Database**: Firebase Firestore
+- **Graph Database**: Neo4j Aura
+- **Styling**: Tailwind CSS
+- **UI Components**: Heroicons
+- **Notifications**: React Hot Toast
 
-```js
-export default tseslint.config({
-  extends: [
-    // Remove ...tseslint.configs.recommended and replace with this
-    ...tseslint.configs.recommendedTypeChecked,
-    // Alternatively, use this for stricter rules
-    ...tseslint.configs.strictTypeChecked,
-    // Optionally, add this for stylistic rules
-    ...tseslint.configs.stylisticTypeChecked,
-  ],
-  languageOptions: {
-    // other options...
-    parserOptions: {
-      project: ['./tsconfig.node.json', './tsconfig.app.json'],
-      tsconfigRootDir: import.meta.dirname,
-    },
-  },
-})
+## Prerequisites
+
+- Node.js (v18 or higher)
+- npm or yarn
+- Firebase account
+- Neo4j Aura account
+
+## Setup Instructions
+
+### 1. Clone the Repository
+
+```bash
+git clone https://github.com/yourusername/social-app-quick.git
+cd social-app-quick
+npm install
 ```
 
-You can also install [eslint-plugin-react-x](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-x) and [eslint-plugin-react-dom](https://github.com/Rel1cx/eslint-react/tree/main/packages/plugins/eslint-plugin-react-dom) for React-specific lint rules:
+### 2. Firebase Setup
 
-```js
-// eslint.config.js
-import reactX from 'eslint-plugin-react-x'
-import reactDom from 'eslint-plugin-react-dom'
+1. Create a new Firebase project at [Firebase Console](https://console.firebase.google.com/)
+2. Enable Authentication:
+   - Go to Authentication > Sign-in method
+   - Enable Email/Password and Google sign-in methods
 
-export default tseslint.config({
-  plugins: {
-    // Add the react-x and react-dom plugins
-    'react-x': reactX,
-    'react-dom': reactDom,
-  },
-  rules: {
-    // other rules...
-    // Enable its recommended typescript rules
-    ...reactX.configs['recommended-typescript'].rules,
-    ...reactDom.configs.recommended.rules,
-  },
-})
+3. Create a Firestore database:
+   - Go to Firestore Database
+   - Create a database in production mode
+   - Start in test mode for development
+
+4. Get your Firebase configuration:
+   - Go to Project Settings
+   - Under "Your apps", click the web icon (</>)
+   - Register your app and copy the configuration
+
+5. Create a `.env` file in the project root:
+```env
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
 ```
+
+### 3. Neo4j Aura Setup
+
+1. Create a Neo4j Aura account at [Neo4j Aura](https://neo4j.com/cloud/platform/aura-graph-database/)
+2. Create a new instance:
+   - Choose "AuraDB Free" tier
+   - Set a password (save it!)
+   - Wait for the instance to be created
+
+3. Get your Neo4j connection details:
+   - Click on your instance
+   - Copy the connection string (starts with `neo4j+s://`)
+   - Note down the username (usually 'neo4j') and password
+
+4. Add Neo4j credentials to your `.env` file:
+```env
+VITE_NEO4J_URI=your_neo4j_connection_string
+VITE_NEO4J_USER=neo4j
+VITE_NEO4J_PASSWORD=your_password
+```
+
+### 4. Development
+
+```bash
+npm run dev
+```
+
+The app will be available at `http://localhost:5173`
+
+### 5. Deployment
+
+1. Build the application:
+```bash
+npm run build
+```
+
+2. Deploy to Firebase Hosting:
+```bash
+npm install -g firebase-tools
+firebase login
+firebase init
+# Select Hosting and follow the prompts
+firebase deploy
+```
+
+## Project Structure
+
+```
+src/
+├── components/         # React components
+├── contexts/          # React contexts (Auth, etc.)
+├── services/          # External service integrations
+├── types/            # TypeScript type definitions
+├── config/           # Configuration files
+└── App.tsx           # Main application component
+```
+
+## Contributing
+
+1. Fork the repository
+2. Create your feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add some amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## License
+
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+
+## Acknowledgments
+
+- [Firebase](https://firebase.google.com/)
+- [Neo4j](https://neo4j.com/)
+- [Tailwind CSS](https://tailwindcss.com/)
+- [React](https://reactjs.org/)
