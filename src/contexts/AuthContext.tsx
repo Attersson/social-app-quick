@@ -9,8 +9,9 @@ import {
   onAuthStateChanged,
   updateProfile,
 } from 'firebase/auth';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
 import { auth, db } from '../config/firebase';
+import { neo4jService } from '../services/neo4j';
 
 interface UserData {
   displayName?: string;
@@ -33,6 +34,11 @@ interface AuthContextType {
   updateUsername: (username: string) => Promise<void>;
   updateBio: (bio: string) => Promise<void>;
   userBio: string;
+  followUser: (userId: string) => Promise<void>;
+  unfollowUser: (userId: string) => Promise<void>;
+  isFollowing: (userId: string) => Promise<boolean>;
+  followersCount: number;
+  followingCount: number;
 }
 
 const AuthContext = createContext<AuthContextType | null>(null);
@@ -49,6 +55,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [userBio, setUserBio] = useState('');
   const [loading, setLoading] = useState(true);
+  const [followersCount, setFollowersCount] = useState(0);
+  const [followingCount, setFollowingCount] = useState(0);
 
   const syncUserData = async (user: User) => {
     const userDoc = await getDoc(doc(db, 'users', user.uid));
@@ -85,16 +93,34 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         await updateProfile(user, authUpdates);
         setUser({ ...user, ...authUpdates });
       }
+
+      // Sync Neo4j user data
+      await neo4jService.createUser(user.uid, user.displayName || '');
+      
+      // Update followers/following counts
+      const [followers, following] = await Promise.all([
+        neo4jService.getFollowersCount(user.uid),
+        neo4jService.getFollowingCount(user.uid)
+      ]);
+      setFollowersCount(followers);
+      setFollowingCount(following);
     } else {
       // Create new user document with all available information
       const userData = {
         displayName: user.displayName || user.email?.split('@')[0] || 'User',
         email: user.email,
-        photoURL: user.photoURL,
+        photoURL: 'https://i.pravatar.cc/150?img=4',
         bio: ''
       };
       await setDoc(doc(db, 'users', user.uid), userData);
       setUserBio('');
+      
+      // Create Neo4j user node
+      await neo4jService.createUser(user.uid, userData.displayName);
+      
+      // Initialize counts
+      setFollowersCount(0);
+      setFollowingCount(0);
       
       // Ensure display name is set in Auth profile
       if (!user.displayName) {
@@ -112,6 +138,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       } else {
         setUser(null);
         setUserBio('');
+        setFollowersCount(0);
+        setFollowingCount(0);
       }
       setLoading(false);
     });
@@ -130,11 +158,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await setDoc(doc(db, 'users', result.user.uid), {
       displayName: initialDisplayName,
       email: result.user.email,
-      photoURL: result.user.photoURL,
+      photoURL: 'https://i.pravatar.cc/150?img=4',
       bio: '',
     });
     
+    // Create Neo4j user node
+    await neo4jService.createUser(result.user.uid, initialDisplayName);
+    
     setUser({ ...result.user, displayName: initialDisplayName });
+    setFollowersCount(0);
+    setFollowingCount(0);
   };
 
   const signIn = async (email: string, password: string) => {
@@ -154,6 +187,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       photoURL: 'https://i.pravatar.cc/150?img=4'
     }, { merge: true });
     
+    // Create or update Neo4j user node
+    await neo4jService.createUser(result.user.uid, result.user.displayName || '');
+    
     await syncUserData(result.user);
     setUser(result.user);
   };
@@ -162,6 +198,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await signOut(auth);
     setUser(null);
     setUserBio('');
+    setFollowersCount(0);
+    setFollowingCount(0);
   };
 
   const updateUsername = async (username: string) => {
@@ -175,6 +213,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       displayName: username
     }, { merge: true });
     
+    // Update Neo4j
+    await neo4jService.createUser(user.uid, username);
+    
     setUser({ ...user, displayName: username });
   };
 
@@ -182,6 +223,33 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     if (!user) throw new Error('No user logged in');
     await setDoc(doc(db, 'users', user.uid), { bio }, { merge: true });
     setUserBio(bio);
+  };
+
+  const followUser = async (userId: string) => {
+    if (!user) throw new Error('No user logged in');
+    await neo4jService.followUser(user.uid, userId);
+    const [followers, following] = await Promise.all([
+      neo4jService.getFollowersCount(user.uid),
+      neo4jService.getFollowingCount(user.uid)
+    ]);
+    setFollowersCount(followers);
+    setFollowingCount(following);
+  };
+
+  const unfollowUser = async (userId: string) => {
+    if (!user) throw new Error('No user logged in');
+    await neo4jService.unfollowUser(user.uid, userId);
+    const [followers, following] = await Promise.all([
+      neo4jService.getFollowersCount(user.uid),
+      neo4jService.getFollowingCount(user.uid)
+    ]);
+    setFollowersCount(followers);
+    setFollowingCount(following);
+  };
+
+  const isFollowing = async (userId: string): Promise<boolean> => {
+    if (!user) return false;
+    return neo4jService.isFollowing(user.uid, userId);
   };
 
   const value = {
@@ -193,6 +261,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     updateUsername,
     updateBio,
     userBio,
+    followUser,
+    unfollowUser,
+    isFollowing,
+    followersCount,
+    followingCount,
   };
 
   if (loading) {

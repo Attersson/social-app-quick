@@ -3,6 +3,8 @@ import { useParams, Navigate } from 'react-router-dom';
 import { doc, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { useAuth } from '../contexts/AuthContext';
+import { FollowButton } from './FollowButton';
+import { neo4jService } from '../services/neo4j';
 
 interface User {
   id: string;
@@ -10,6 +12,7 @@ interface User {
   email: string;
   photoURL?: string;
   bio?: string;
+  followersCount: number;
 }
 
 export default function UserProfile() {
@@ -25,9 +28,11 @@ export default function UserProfile() {
       try {
         const userDoc = await getDoc(doc(db, 'users', userId));
         if (userDoc.exists()) {
+          const followersCount = await neo4jService.getFollowersCount(userId);
           setUser({
             id: userDoc.id,
-            ...userDoc.data()
+            ...userDoc.data(),
+            followersCount
           } as User);
         }
       } catch (error) {
@@ -70,16 +75,26 @@ export default function UserProfile() {
           <div className="relative">
             <img
               className="h-20 w-20 rounded-full object-cover"
-              src="https://i.pravatar.cc/150?img=4"
+              src={user.photoURL || 'https://i.pravatar.cc/150?img=4'}
               alt={user.displayName || 'User avatar'}
             />
           </div>
           
-          <div className="text-center sm:text-left">
-            <h2 className="text-2xl font-bold text-gray-900">
-              {user.displayName || 'Anonymous'}
-            </h2>
-            <p className="text-gray-600">{user.email}</p>
+          <div className="text-center sm:text-left flex-1">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-2xl font-bold text-gray-900">
+                  {user.displayName || 'Anonymous'}
+                </h2>
+                <p className="text-gray-600">{user.email}</p>
+                <p className="text-sm text-gray-500 mt-1">
+                  {user.followersCount} followers
+                </p>
+              </div>
+              {currentUser && userId && currentUser.uid !== userId && (
+                <FollowButton userId={userId} />
+              )}
+            </div>
           </div>
         </div>
 

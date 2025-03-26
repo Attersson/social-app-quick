@@ -1,30 +1,30 @@
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import { Toaster } from 'react-hot-toast';
 import { AuthProvider } from './contexts/AuthContext';
+import { Toaster } from 'react-hot-toast';
 import Navbar from './components/Navbar';
 import AuthUI from './components/AuthUI';
 import Feed from './components/Feed';
 import Profile from './components/Profile';
-import UsersList from './components/UsersList';
+import { UsersList } from './components/UsersList';
 import UserProfile from './components/UserProfile';
 
 function App() {
   return (
     <Router>
       <AuthProvider>
-        <div className="min-h-screen bg-gray-100 w-full">
+        <div className="min-h-screen bg-gray-50">
           <Navbar />
-          <main className="container mx-auto px-4 py-6 sm:px-6 lg:px-8 min-h-[calc(100vh-64px)]">
+          <main className="container mx-auto px-4 py-8">
             <Routes>
               <Route path="/" element={<Feed />} />
-              <Route path="/login" element={<AuthUI />} />
+              <Route path="/auth" element={<AuthUI />} />
               <Route path="/profile" element={<Profile />} />
               <Route path="/users" element={<UsersList />} />
               <Route path="/users/:userId" element={<UserProfile />} />
             </Routes>
           </main>
-          <Toaster position="top-right" />
         </div>
+        <Toaster position="top-right" />
       </AuthProvider>
     </Router>
   );
