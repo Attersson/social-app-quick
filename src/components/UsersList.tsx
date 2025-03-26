@@ -4,6 +4,7 @@ import { db } from '../config/firebase';
 import { Link } from 'react-router-dom';
 import { FollowButton } from './FollowButton';
 import { neo4jService } from '../services/neo4j';
+import Breadcrumb from './Breadcrumb';
 
 interface User {
   id: string;
@@ -51,34 +52,37 @@ export const UsersList = () => {
   }
 
   return (
-    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-      {users.map((userData) => (
-        <Link
-          key={userData.id}
-          to={`/users/${userData.id}`}
-          className="bg-white rounded-lg shadow-md p-4 flex items-center space-x-4 hover:shadow-lg transition-shadow"
-        >
-          <img
-            src={userData.photoURL || 'https://i.pravatar.cc/150?img=4'}
-            alt={userData.displayName || 'User'}
-            className="w-10 h-10 rounded-full"
-          />
-          <div className="flex-1">
-            <h3 className="font-medium text-gray-900">
-              {userData.displayName || userData.email?.split('@')[0] || 'Anonymous'}
-            </h3>
-            <p className="text-sm text-gray-500">
-              {userData.bio || 'No bio yet'}
-            </p>
-            <p className="text-xs text-gray-400">
-              {userData.followersCount} followers
-            </p>
+    <div className="max-w-4xl mx-auto px-4 py-8">
+      <Breadcrumb items={[{ label: 'Users' }]} />
+      
+      <div className="bg-white shadow rounded-lg">
+        <div className="p-6">
+          <h1 className="text-2xl font-bold text-gray-900 mb-6">All Users</h1>
+          <div className="space-y-4">
+            {users.map((user) => (
+              <div
+                key={user.id}
+                className="flex items-center justify-between p-4 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors"
+              >
+                <Link to={`/users/${user.id}`} className="flex items-center space-x-4">
+                  <img
+                    src={user.photoURL || 'https://i.pravatar.cc/150?img=4'}
+                    alt={user.displayName || 'User avatar'}
+                    className="w-12 h-12 rounded-full"
+                  />
+                  <div>
+                    <h2 className="font-semibold text-gray-900">
+                      {user.displayName || 'Anonymous'}
+                    </h2>
+                    <p className="text-sm text-gray-500">{user.followersCount} followers</p>
+                  </div>
+                </Link>
+                <FollowButton userId={user.id} />
+              </div>
+            ))}
           </div>
-          <div onClick={(e) => e.preventDefault()}>
-            <FollowButton userId={userData.id} />
-          </div>
-        </Link>
-      ))}
+        </div>
+      </div>
     </div>
   );
 }; 

@@ -3,8 +3,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { collection, query, orderBy, onSnapshot, Timestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Post as PostType, Comment } from '../types/Post';
+import { neo4jService } from '../services/neo4j';
 import PostForm from './PostForm';
 import PostCard from './PostCard';
+import Breadcrumb from './Breadcrumb';
 
 interface FirestoreComment extends Omit<Comment, 'createdAt'> {
   createdAt: Timestamp;
@@ -19,6 +21,22 @@ export default function Feed() {
   const { user } = useAuth();
   const [posts, setPosts] = useState<PostType[]>([]);
   const [loading, setLoading] = useState(true);
+  const [following, setFollowing] = useState<string[]>([]);
+
+  useEffect(() => {
+    const fetchFollowing = async () => {
+      if (!user) return;
+      try {
+        // Get all following users by setting a high limit (as integer)
+        const followingList = await neo4jService.getFollowing(user.uid, 0, 1000);
+        setFollowing(followingList.map(f => f.id));
+      } catch (error) {
+        console.error('Error fetching following:', error);
+      }
+    };
+
+    fetchFollowing();
+  }, [user]);
 
   useEffect(() => {
     const q = query(collection(db, 'posts'), orderBy('createdAt', 'desc'));
@@ -41,7 +59,14 @@ export default function Feed() {
         };
       });
       
-      setPosts(newPosts);
+      // Filter posts to only show posts from followed users and the current user
+      const filteredPosts = newPosts.filter(post => 
+        !user || // If no user is logged in, show all posts
+        post.authorId === user.uid || // Show user's own posts
+        following.includes(post.authorId) // Show posts from followed users
+      );
+      
+      setPosts(filteredPosts);
       setLoading(false);
     }, (error) => {
       console.error('Error fetching posts:', error);
@@ -49,7 +74,7 @@ export default function Feed() {
     });
 
     return () => unsubscribe();
-  }, []);
+  }, [user, following]);
 
   const handlePostUpdate = () => {
     // The posts will automatically update through the onSnapshot listener
@@ -57,6 +82,8 @@ export default function Feed() {
 
   return (
     <div className="w-full max-w-4xl mx-auto">
+      <Breadcrumb items={[{ label: 'Feed' }]} />
+      
       {user && <PostForm onPostCreated={handlePostUpdate} />}
       
       {loading ? (
@@ -71,7 +98,9 @@ export default function Feed() {
       ) : (
         <div className="bg-white shadow rounded-lg p-6 text-center">
           <p className="text-gray-600">
-            {user ? "No posts yet. Be the first to post!" : "Sign in to see posts from the community."}
+            {user 
+              ? "No posts from followed users yet. Follow some users to see their posts!" 
+              : "Sign in to see posts from the community."}
           </p>
         </div>
       )}

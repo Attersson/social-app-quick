@@ -6,6 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { FollowButton } from './FollowButton';
 import { neo4jService } from '../services/neo4j';
 import UserPosts from './UserPosts';
+import Breadcrumb from './Breadcrumb';
 
 interface User {
   id: string;
@@ -71,6 +72,13 @@ export default function UserProfile() {
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">
+      <Breadcrumb 
+        items={[
+          { label: 'Users', href: '/users' },
+          { label: user.displayName }
+        ]} 
+      />
+      
       <div className="bg-white shadow rounded-lg p-6 mb-8">
         <div className="flex items-center justify-between">
           <div className="flex items-center space-x-4">
