@@ -49,7 +49,7 @@ export default function Profile() {
   };
 
   if (!user) {
-    return <Navigate to="/login" replace />;
+    return <Navigate to="/auth" replace />;
   }
 
   // For now, we'll just show the current user's profile
