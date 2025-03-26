@@ -1,7 +1,7 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Post } from '../types/Post';
-import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { HeartIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
@@ -22,8 +22,27 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
   const [showComments, setShowComments] = useState(false);
   const [newComment, setNewComment] = useState('');
   const [isSubmittingComment, setIsSubmittingComment] = useState(false);
+  const [optimisticLikes, setOptimisticLikes] = useState<string[]>(post.likes);
+  const [currentPost, setCurrentPost] = useState<Post>(post);
 
-  const isLiked = user ? post.likes.includes(user.uid) : false;
+  useEffect(() => {
+    // Set up real-time listener for post updates
+    const unsubscribe = onSnapshot(doc(db, 'posts', post.id), (doc) => {
+      if (doc.exists()) {
+        const updatedPost = { ...doc.data(), id: doc.id } as Post;
+        setCurrentPost(updatedPost);
+        // Only update optimisticLikes if we're not in the middle of an optimistic update
+        if (!isLiking) {
+          setOptimisticLikes(updatedPost.likes);
+        }
+      }
+    });
+
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, [post.id]);
+
+  const isLiked = user ? optimisticLikes.includes(user.uid) : false;
 
   const getDateFromTimestamp = (timestamp: Date | Timestamp): Date => {
     if (timestamp instanceof Timestamp) {
@@ -39,13 +58,22 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     }
 
     setIsLiking(true);
+    // Optimistically update the likes
+    const wasLiked = optimisticLikes.includes(user.uid);
+    setOptimisticLikes(wasLiked 
+      ? optimisticLikes.filter(id => id !== user.uid)
+      : [...optimisticLikes, user.uid]
+    );
+
     try {
       const postRef = doc(db, 'posts', post.id);
       await updateDoc(postRef, {
-        likes: isLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
+        likes: wasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
       });
       onUpdate();
     } catch (error) {
+      // Revert optimistic update on error
+      setOptimisticLikes(currentPost.likes);
       console.error('Error updating like:', error);
       toast.error('Failed to update like');
     } finally {
@@ -118,7 +146,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           </p>
         </div>
       </div>
-      <p className="text-gray-900 mb-4 whitespace-pre-wrap">{post.content}</p>
+      <p className="text-gray-900 mb-4 whitespace-pre-wrap">{currentPost.content}</p>
       <div className="flex items-center space-x-6 border-t border-gray-200 pt-4">
         <button
           onClick={handleLike}
@@ -130,20 +158,20 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           ) : (
             <HeartIcon className="h-6 w-6" />
           )}
-          <span>{post.likes.length}</span>
+          <span>{optimisticLikes.length}</span>
         </button>
         <button
           onClick={() => setShowComments(!showComments)}
           className="flex items-center space-x-2 text-gray-500 hover:text-blue-500 transition-colors"
         >
           <ChatBubbleLeftIcon className="h-6 w-6" />
-          <span>{post.comments.length}</span>
+          <span>{currentPost.comments.length}</span>
         </button>
       </div>
       
       {showComments && (
         <div className="mt-4 border-t border-gray-200 pt-4">
-          {post.comments.map((comment) => (
+          {currentPost.comments.map((comment) => (
             <div key={comment.id} className="flex items-start space-x-3 mb-4">
               <Link to={`/users/${comment.authorId}`} className="flex-shrink-0">
                 <img
