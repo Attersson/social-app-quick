@@ -7,6 +7,7 @@ import { FollowButton } from './FollowButton';
 import { neo4jService } from '../services/neo4j';
 import UserPosts from './UserPosts';
 import Breadcrumb from './Breadcrumb';
+import MutualFollowBadge from './MutualFollowBadge';
 
 interface User {
   id: string;
@@ -88,7 +89,12 @@ export default function UserProfile() {
               className="w-20 h-20 rounded-full"
             />
             <div>
-              <h1 className="text-2xl font-bold text-gray-900">{user.displayName}</h1>
+              <div className="flex items-center space-x-2">
+                <h1 className="text-2xl font-bold text-gray-900">{user.displayName}</h1>
+                {currentUser && currentUser.uid !== userId && (
+                  <MutualFollowBadge userId={userId} />
+                )}
+              </div>
               <p className="text-gray-600">{user.email}</p>
               <p className="text-sm text-gray-500">{user.followersCount} followers</p>
             </div>

@@ -5,6 +5,7 @@ import { Link } from 'react-router-dom';
 import { FollowButton } from './FollowButton';
 import { neo4jService } from '../services/neo4j';
 import Breadcrumb from './Breadcrumb';
+import MutualFollowBadge from './MutualFollowBadge';
 
 interface User {
   id: string;
@@ -71,10 +72,16 @@ export const UsersList = () => {
                     className="w-12 h-12 rounded-full"
                   />
                   <div>
-                    <h2 className="font-semibold text-gray-900">
-                      {user.displayName || 'Anonymous'}
-                    </h2>
-                    <p className="text-sm text-gray-500">{user.followersCount} followers</p>
+                    <div className="flex items-center space-x-2">
+                      <Link
+                        to={`/users/${user.id}`}
+                        className="text-lg font-medium text-gray-900 hover:underline"
+                      >
+                        {user.displayName}
+                      </Link>
+                      <MutualFollowBadge userId={user.id} />
+                    </div>
+                    <p className="text-sm text-gray-500">{user.email}</p>
                   </div>
                 </Link>
                 <FollowButton userId={user.id} />

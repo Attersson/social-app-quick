@@ -7,6 +7,7 @@ import { HeartIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import { Link } from 'react-router-dom';
 import { FollowButton } from './FollowButton';
+import MutualFollowBadge from './MutualFollowBadge';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -102,9 +103,12 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         </Link>
         <div className="flex-1">
           <div className="flex items-center justify-between">
-            <Link to={`/users/${post.authorId}`} className="hover:underline">
-              <h3 className="font-semibold text-gray-900">{post.authorName}</h3>
-            </Link>
+            <div className="flex items-center space-x-2">
+              <Link to={`/users/${post.authorId}`} className="hover:underline">
+                <h3 className="font-semibold text-gray-900">{post.authorName}</h3>
+              </Link>
+              <MutualFollowBadge userId={post.authorId} />
+            </div>
             {user && user.uid !== post.authorId && (
               <FollowButton userId={post.authorId} />
             )}

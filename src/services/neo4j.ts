@@ -212,6 +212,23 @@ class Neo4jService {
       await session.close();
     }
   }
+
+  async isMutualFollow(userId: string, otherUserId: string): Promise<boolean> {
+    const session = this.driver.session();
+    try {
+      const result = await session.run(
+        `
+        MATCH (user:User {id: $userId})-[:FOLLOWS]->(other:User {id: $otherUserId})
+        MATCH (other)-[:FOLLOWS]->(user)
+        RETURN count(*) > 0 as isMutual
+        `,
+        { userId, otherUserId }
+      );
+      return result.records[0]?.get('isMutual') || false;
+    } finally {
+      await session.close();
+    }
+  }
 }
 
 export const neo4jService = new Neo4jService(); 
