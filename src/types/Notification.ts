@@ -10,4 +10,6 @@ export interface Notification {
   createdAt: Date | Timestamp;
   postId?: string;
   postContent?: string;
+  commentId?: string;
+  isCommentNotification?: boolean;
 } 

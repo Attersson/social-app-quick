@@ -23,6 +23,19 @@ export default function NotificationsList() {
       case 'unfollow':
         return <>{actorName} unfollowed you</>;
       case 'like':
+        if (notification.isCommentNotification) {
+          return (
+            <>
+              {actorName} liked your comment:{' '}
+              <Link 
+                to={`/posts/${notification.postId}#comment-${notification.commentId}`} 
+                className="text-gray-600 hover:text-gray-900 block mt-1 text-sm"
+              >
+                "{notification.postContent}"
+              </Link>
+            </>
+          );
+        }
         return (
           <>
             {actorName} liked your post:{' '}
@@ -35,6 +48,19 @@ export default function NotificationsList() {
           </>
         );
       case 'unlike':
+        if (notification.isCommentNotification) {
+          return (
+            <>
+              {actorName} removed their like from your comment:{' '}
+              <Link 
+                to={`/posts/${notification.postId}#comment-${notification.commentId}`} 
+                className="text-gray-600 hover:text-gray-900 block mt-1 text-sm"
+              >
+                "{notification.postContent}"
+              </Link>
+            </>
+          );
+        }
         return (
           <>
             {actorName} removed their like from your post:{' '}

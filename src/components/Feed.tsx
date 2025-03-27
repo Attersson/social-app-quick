@@ -45,18 +45,48 @@ export default function Feed() {
     const unsubscribe = onSnapshot(q, (snapshot) => {
       const newPosts = snapshot.docs.map(doc => {
         const data = doc.data() as FirestorePost;
+        
+        // Process comments from either array or object format
+        const rawComments = data.comments || [];
+        const processComments = (rawData: unknown[]): Comment[] => {
+          return rawData.map(item => {
+            const comment = item as FirestoreComment;
+            const processed: Comment = {
+              id: comment.id,
+              content: comment.content,
+              authorId: comment.authorId,
+              authorName: comment.authorName,
+              authorPhotoURL: comment.authorPhotoURL,
+              parentId: comment.parentId,
+              createdAt: comment.createdAt?.toDate() || new Date(),
+              likes: comment.likes || [],
+              replies: []
+            };
+
+            if (comment.replies) {
+              const rawReplies = Array.isArray(comment.replies) 
+                ? comment.replies 
+                : Object.values(comment.replies);
+              processed.replies = processComments(rawReplies);
+            }
+
+            return processed;
+          });
+        };
+
+        const comments = processComments(
+          Array.isArray(rawComments) ? rawComments : Object.values(rawComments)
+        );
+        
         return {
           id: doc.id,
           content: data.content,
           authorId: data.authorId,
           authorName: data.authorName,
           authorPhotoURL: data.authorPhotoURL,
-          likes: data.likes,
+          likes: data.likes || [],
           createdAt: data.createdAt?.toDate() || new Date(),
-          comments: data.comments?.map(comment => ({
-            ...comment,
-            createdAt: comment.createdAt?.toDate() || new Date()
-          })) || []
+          comments
         };
       });
       
