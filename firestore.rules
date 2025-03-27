@@ -2,47 +2,39 @@ rules_version = '2';
 
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
     match /users/{userId} {
-      allow read: if request.auth != null;
-      allow write: if request.auth != null && request.auth.uid == userId;
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && isOwner(userId);
     }
     
     match /posts/{postId} {
-      allow read: if true;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && (
-        // Allow users to update their own posts
-        request.resource.data.authorId == request.auth.uid ||
-        // Allow users to like/unlike posts
-        (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) &&
-          (
-            // When adding a like (array union)
-            (request.resource.data.likes.hasAll(resource.data.likes) &&
-             request.resource.data.likes.size() == resource.data.likes.size() + 1 &&
-             request.resource.data.likes.removeAll(resource.data.likes)[0] == request.auth.uid) ||
-            // When removing a like (array remove)
-            (resource.data.likes.hasAll(request.resource.data.likes) &&
-             request.resource.data.likes.size() == resource.data.likes.size() - 1 &&
-             resource.data.likes.removeAll(request.resource.data.likes)[0] == request.auth.uid)
-          )
-        ) ||
-        // Allow users to add comments
-        (
-          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments']) &&
-          request.resource.data.comments.size() == resource.data.comments.size() + 1 &&
-          request.resource.data.comments.removeAll(resource.data.comments)[0].authorId == request.auth.uid
-        )
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        // Allow post owner to update any field
+        isOwner(resource.data.authorId) ||
+        // Allow any authenticated user to update likes array
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['likes']) ||
+        // Allow any authenticated user to update comments array
+        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['comments'])
       );
-      allow delete: if request.auth != null && resource.data.authorId == request.auth.uid;
+      allow delete: if isAuthenticated() && isOwner(resource.data.authorId);
     }
 
     match /notifications/{notificationId} {
-      allow read: if request.auth != null && resource.data.userId == request.auth.uid;
-      allow create: if request.auth != null;
-      allow update: if request.auth != null && 
-        resource.data.userId == request.auth.uid && 
-        request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow read: if isAuthenticated() && isOwner(resource.data.userId);
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
     }
   }
 } 

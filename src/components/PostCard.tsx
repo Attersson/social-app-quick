@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationsContext';
-import { Post } from '../types/Post';
+import { Post, Comment } from '../types/Post';
 import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { HeartIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
@@ -9,6 +9,7 @@ import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
 import { Link } from 'react-router-dom';
 import { FollowButton } from './FollowButton';
 import MutualFollowBadge from './MutualFollowBadge';
+import CommentThread from './CommentThread';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 
@@ -122,7 +123,9 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           authorId: user.uid,
           authorName: user.displayName || 'Anonymous',
           authorPhotoURL: 'https://i.pravatar.cc/150?img=4',
-          createdAt: now
+          createdAt: now,
+          likes: [],
+          replies: []
         })
       });
       setNewComment('');
@@ -133,6 +136,101 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       toast.error('Failed to add comment');
     } finally {
       setIsSubmittingComment(false);
+    }
+  };
+
+  const handleReply = async (parentId: string, content: string) => {
+    if (!user) {
+      toast.error('Please sign in to reply');
+      return;
+    }
+
+    try {
+      const now = new Date();
+      const postRef = doc(db, 'posts', post.id);
+      
+      // Create the new reply
+      const newReply = {
+        id: crypto.randomUUID(),
+        content,
+        authorId: user.uid,
+        authorName: user.displayName || 'Anonymous',
+        authorPhotoURL: 'https://i.pravatar.cc/150?img=4',
+        createdAt: now,
+        parentId,
+        likes: [],
+        replies: []
+      };
+
+      // Recursively find and update the parent comment
+      const findAndUpdateComment = (comments: Comment[]): Comment[] => {
+        return comments.map(comment => {
+          // If this is the parent comment, add the reply
+          if (comment.id === parentId) {
+            return {
+              ...comment,
+              replies: [...(comment.replies || []), newReply]
+            };
+          }
+          // If this comment has replies, search through them
+          if (comment.replies && comment.replies.length > 0) {
+            return {
+              ...comment,
+              replies: findAndUpdateComment(comment.replies)
+            };
+          }
+          return comment;
+        });
+      };
+
+      const updatedComments = findAndUpdateComment(currentPost.comments);
+
+      // Update the post with the new comments structure
+      await updateDoc(postRef, { comments: updatedComments });
+      onUpdate();
+      toast.success('Reply added successfully!');
+    } catch (error) {
+      console.error('Error adding reply:', error);
+      toast.error('Failed to add reply');
+    }
+  };
+
+  const handleCommentLike = async (commentId: string) => {
+    if (!user) {
+      toast.error('Please sign in to like comments');
+      return;
+    }
+
+    try {
+      const postRef = doc(db, 'posts', post.id);
+      
+      // Find the comment (either top-level or reply) and toggle the like
+      const updateComment = (comment: Comment): Comment => {
+        if (comment.id === commentId) {
+          const likes = comment.likes || [];
+          const userLiked = likes.includes(user.uid);
+          return {
+            ...comment,
+            likes: userLiked
+              ? likes.filter(id => id !== user.uid)
+              : [...likes, user.uid]
+          };
+        }
+        if (comment.replies) {
+          return {
+            ...comment,
+            replies: comment.replies.map(reply => updateComment(reply))
+          };
+        }
+        return comment;
+      };
+
+      const updatedComments = currentPost.comments.map(comment => updateComment(comment));
+      await updateDoc(postRef, { comments: updatedComments });
+      onUpdate();
+    } catch (error) {
+      console.error('Error updating comment like:', error);
+      toast.error('Failed to update like');
     }
   };
 
@@ -189,26 +287,13 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       {showComments && (
         <div className="mt-4 border-t border-gray-200 pt-4">
           {currentPost.comments.map((comment) => (
-            <div key={comment.id} className="flex items-start space-x-3 mb-4">
-              <Link to={`/users/${comment.authorId}`} className="flex-shrink-0">
-                <img
-                  src={'https://i.pravatar.cc/150?img=4'}
-                  alt={comment.authorName}
-                  className="w-8 h-8 rounded-full hover:opacity-80 transition-opacity"
-                />
-              </Link>
-              <div className="flex-1">
-                <div className="bg-gray-50 rounded-lg p-3">
-                  <Link to={`/users/${comment.authorId}`} className="hover:underline">
-                    <h4 className="font-semibold text-gray-900">{comment.authorName}</h4>
-                  </Link>
-                  <p className="text-gray-700">{comment.content}</p>
-                </div>
-                <p className="text-xs text-gray-500 mt-1">
-                  {formatDistanceToNow(getDateFromTimestamp(comment.createdAt), { addSuffix: true })}
-                </p>
-              </div>
-            </div>
+            <CommentThread
+              key={comment.id}
+              comment={comment}
+              postId={post.id}
+              onReply={handleReply}
+              onLike={handleCommentLike}
+            />
           ))}
           
           {user && (
