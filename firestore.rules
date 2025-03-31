@@ -36,5 +36,28 @@ service cloud.firestore {
       allow update: if isAuthenticated() && isOwner(resource.data.userId);
       allow delete: if isAuthenticated() && isOwner(resource.data.userId);
     }
+
+    // Analytics collections
+    match /postAnalytics/{postId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /userAnalytics/{userId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /dailyAnalytics/{date} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated();
+    }
+
+    match /analyticsEvents/{eventId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated();
+      // Only allow updates and deletes by the user who created the event
+      allow update, delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
   }
 } 

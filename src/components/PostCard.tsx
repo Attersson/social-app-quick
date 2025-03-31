@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationsContext';
 import { Post, Comment } from '../types/Post';
-import { doc, updateDoc, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, updateDoc, arrayUnion, arrayRemove, Timestamp, getDoc } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { HeartIcon, ChatBubbleLeftIcon } from '@heroicons/react/24/outline';
 import { HeartIcon as HeartIconSolid } from '@heroicons/react/24/solid';
@@ -13,6 +13,7 @@ import CommentThread from './CommentThread';
 import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { getDateFromTimestamp } from '../utils/date';
+import { logAnalyticsEvent } from '../services/analyticsService';
 
 interface PostCardProps {
   post: Post;
@@ -34,32 +35,27 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     setOptimisticLikes(post.likes || []);
   }, [post]);
 
+  // Add view tracking when post is loaded
+  useEffect(() => {
+    if (user) {
+      logAnalyticsEvent({
+        type: 'post_view',
+        userId: user.uid,
+        postId: post.id,
+        timestamp: Timestamp.now(),
+        metadata: {
+          deviceType: 'web'
+        }
+      });
+    }
+  }, [post.id, user]);
+
   // Deep clone the comments array with all nested replies
   const cloneComments = (comments: Comment[]): Comment[] => {
     return comments.map(comment => ({
       ...comment,
       replies: comment.replies ? cloneComments(comment.replies) : []
     }));
-  };
-
-  // Update a comment's likes in the nested structure
-  const updateCommentLikes = (
-    comments: Comment[], 
-    targetId: string, 
-    newLikes: string[]
-  ): Comment[] => {
-    return comments.map(comment => {
-      if (comment.id === targetId) {
-        return { ...comment, likes: newLikes };
-      }
-      if (comment.replies && comment.replies.length > 0) {
-        return {
-          ...comment,
-          replies: updateCommentLikes(comment.replies, targetId, newLikes)
-        };
-      }
-      return comment;
-    });
   };
 
   const isLiked = user ? optimisticLikes.includes(user.uid) : false;
@@ -71,9 +67,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     }
 
     setIsLiking(true);
-    // Store the previous state for potential rollback
     const wasLiked = optimisticLikes.includes(user.uid);
-    // Optimistically update the likes
     setOptimisticLikes(wasLiked 
       ? optimisticLikes.filter(id => id !== user.uid)
       : [...optimisticLikes, user.uid]
@@ -85,22 +79,28 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         likes: wasLiked ? arrayRemove(user.uid) : arrayUnion(user.uid)
       });
 
+      // Log analytics event
+      await logAnalyticsEvent({
+        type: wasLiked ? 'post_unlike' : 'post_like',
+        userId: user.uid,
+        postId: post.id,
+        timestamp: Timestamp.now()
+      });
+
       // Only send notification if the post author is not the current user
       if (post.authorId !== user.uid) {
-        // Create notification for the post author
         await addNotification({
           userId: post.authorId,
           type: wasLiked ? 'unlike' : 'like',
           actorId: user.uid,
           actorName: user.displayName || 'Anonymous',
           postId: post.id,
-          postContent: post.content.substring(0, 50) + (post.content.length > 50 ? '...' : '') // Include a preview of the post content
+          postContent: post.content.substring(0, 50) + (post.content.length > 50 ? '...' : '')
         });
       }
 
       onUpdate();
     } catch (error) {
-      // Revert optimistic update on error
       setOptimisticLikes(currentPost.likes);
       console.error('Error updating like:', error);
       toast.error('Failed to update like');
@@ -125,10 +125,11 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     setIsSubmittingComment(true);
     try {
       const now = new Date();
+      const commentId = crypto.randomUUID();
       const postRef = doc(db, 'posts', post.id);
       await updateDoc(postRef, {
         comments: arrayUnion({
-          id: crypto.randomUUID(),
+          id: commentId,
           content: trimmedComment,
           authorId: user.uid,
           authorName: user.displayName || 'Anonymous',
@@ -138,6 +139,16 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           replies: []
         })
       });
+
+      // Log analytics event
+      await logAnalyticsEvent({
+        type: 'comment_create',
+        userId: user.uid,
+        postId: post.id,
+        commentId: commentId,
+        timestamp: Timestamp.now()
+      });
+
       setNewComment('');
       onUpdate();
       toast.success('Comment added successfully!');
@@ -267,119 +278,62 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
 
     try {
       const postRef = doc(db, 'posts', post.id);
-      let commentAuthorId: string | null = null;
-      let commentContent: string | null = null;
-      let wasLiked = false;
-      let commentPath: string[] = [];
-      let currentLikes: string[] = [];
+      const postDoc = await getDoc(postRef);
       
-      // Find the comment and build its path
-      const findComment = (comments: Comment[], path: string[] = []): boolean => {
-        for (let i = 0; i < comments.length; i++) {
-          const comment = comments[i];
-          const currentPath = [...path, i.toString()];
-          
-          if (comment.id === commentId) {
-            currentLikes = comment.likes || [];
-            wasLiked = currentLikes.includes(user.uid);
-            commentAuthorId = comment.authorId;
-            commentContent = comment.content;
-            commentPath = currentPath;
-            return true;
-          }
-          
-          if (comment.replies && comment.replies.length > 0) {
-            const foundInReplies = findComment(comment.replies, [...currentPath, 'replies']);
-            if (foundInReplies) {
-              return true;
-            }
-          }
-        }
-        return false;
-      };
+      if (!postDoc.exists()) {
+        toast.error('Post not found');
+        return;
+      }
 
-      // Clone current comments for optimistic update
-      const updatedComments = cloneComments(currentPost.comments || []);
-      findComment(updatedComments);
+      const postData = postDoc.data();
+      const comment = postData.comments.find((c: Comment) => c.id === commentId);
+      
+      if (!comment) {
+        toast.error('Comment not found');
+        return;
+      }
 
-      // Calculate new likes array
-      const newLikes = wasLiked
-        ? currentLikes.filter(id => id !== user.uid)
-        : [...currentLikes, user.uid];
+      const likes = comment.likes || [];
+      const isLiked = likes.includes(user.uid);
 
-      // Apply optimistic update
-      const optimisticallyUpdatedComments = updateCommentLikes(
-        updatedComments,
-        commentId,
-        newLikes
+      // Update comment likes
+      const newLikes = isLiked 
+        ? likes.filter((id: string) => id !== user.uid)
+        : [...likes, user.uid];
+
+      const updatedComments = postData.comments.map((c: Comment) => 
+        c.id === commentId ? { ...c, likes: newLikes } : c
       );
-      setCurrentPost(prev => ({
-        ...prev,
-        comments: optimisticallyUpdatedComments
-      }));
 
-      if (commentPath.length > 0) {
-        // Build the Firestore update path
-        const updatePath = ['comments', ...commentPath].join('.');
-        
-        // Find the comment to preserve its fields
-        const targetComment = currentPost.comments.reduce((found: Comment | null, comment: Comment) => {
-          if (found) return found;
-          if (comment.id === commentId) return comment;
-          if (comment.replies) {
-            const inReplies = comment.replies.find(r => r.id === commentId);
-            if (inReplies) return inReplies;
-          }
-          return null;
-        }, null);
+      await updateDoc(postRef, { comments: updatedComments });
 
-        if (targetComment) {
-          // Create a clean comment object with only defined fields
-          const cleanComment: Partial<Comment> = {
-            id: targetComment.id,
-            content: targetComment.content,
-            authorId: targetComment.authorId,
-            authorName: targetComment.authorName,
-            createdAt: targetComment.createdAt,
-            likes: newLikes,
-            replies: targetComment.replies || []
-          };
+      // Log analytics event
+      await logAnalyticsEvent({
+        type: isLiked ? 'comment_unlike' : 'comment_like',
+        userId: user.uid,
+        postId: post.id,
+        commentId: commentId,
+        timestamp: Timestamp.now()
+      });
 
-          // Add optional fields only if they exist
-          if (targetComment.authorPhotoURL) {
-            cleanComment.authorPhotoURL = targetComment.authorPhotoURL;
-          }
-          if (targetComment.parentId) {
-            cleanComment.parentId = targetComment.parentId;
-          }
-
-          // Update Firestore with clean comment object
-          await updateDoc(postRef, {
-            [`${updatePath}`]: cleanComment
-          });
-
-          // Send notification if we found the comment and it's not the user's own comment
-          if (commentAuthorId && commentAuthorId !== user.uid && commentContent) {
-            await addNotification({
-              userId: commentAuthorId,
-              type: wasLiked ? 'unlike' : 'like',
-              actorId: user.uid,
-              actorName: user.displayName || 'Anonymous',
-              postId: post.id,
-              commentId,
-              postContent: commentContent,
-              isCommentNotification: true
-            });
-          }
-        }
+      // Send notification if comment is liked
+      if (!isLiked && comment.authorId !== user.uid) {
+        await addNotification({
+          userId: comment.authorId,
+          type: 'like',
+          actorId: user.uid,
+          actorName: user.displayName || 'Anonymous',
+          postId: post.id,
+          postContent: post.content.substring(0, 50) + (post.content.length > 50 ? '...' : ''),
+          commentId: commentId,
+          isCommentNotification: true
+        });
       }
 
       onUpdate();
     } catch (error) {
-      // Revert optimistic update on error
-      setCurrentPost(post);
       console.error('Error updating comment like:', error);
-      toast.error('Failed to update like');
+      toast.error('Failed to update comment like status');
     }
   };
 
