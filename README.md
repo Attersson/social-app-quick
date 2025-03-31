@@ -1,6 +1,6 @@
 # Social App Quick
 
-A modern social media application built with React, Firebase, and Neo4j. Features include user authentication, posts, comments, and a following system.
+A modern social media application built with React, Firebase, and Neo4j. Features include user authentication, posts, comments, a following system, and notifications.
 
 ## Features
 
@@ -9,6 +9,8 @@ A modern social media application built with React, Firebase, and Neo4j. Feature
 - 💬 Comment on posts
 - 👥 Follow/unfollow users
 - 👤 User profiles with bios
+- 🔔 In-app notifications
+- 📱 Push notifications (optional, requires Firebase Blaze plan)
 - 🎨 Modern UI with Tailwind CSS
 - ⚡ Real-time updates
 - 🔄 Infinite scroll feed
@@ -19,9 +21,10 @@ A modern social media application built with React, Firebase, and Neo4j. Feature
 - **Authentication**: Firebase Auth
 - **Database**: Firebase Firestore
 - **Graph Database**: Neo4j Aura
+- **Notifications**: Firebase Cloud Messaging (optional)
 - **Styling**: Tailwind CSS
 - **UI Components**: Heroicons
-- **Notifications**: React Hot Toast
+- **Toast Notifications**: React Hot Toast
 
 ## Prerequisites
 
@@ -65,6 +68,7 @@ VITE_FIREBASE_PROJECT_ID=your_project_id
 VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
 VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
 VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_VAPID_KEY=your_vapid_key_for_push_notifications
 ```
 
 ### 3. Neo4j Aura Setup
@@ -87,7 +91,45 @@ VITE_NEO4J_USER=neo4j
 VITE_NEO4J_PASSWORD=your_password
 ```
 
-### 4. Development
+### 4. Push Notifications Setup (Optional)
+
+The application includes a push notification system using Firebase Cloud Messaging (FCM), but it is **disabled by default** because it requires the Firebase Blaze (pay-as-you-go) plan.
+
+#### Current State:
+- Push notifications are disabled via a flag in `src/services/pushNotificationService.ts`
+- In-app notifications still work normally
+- The app gracefully handles the absence of push notifications
+
+#### To Enable Push Notifications:
+
+1. **Upgrade to Firebase Blaze Plan**:
+   - Go to [Firebase Console](https://console.firebase.google.com/)
+   - Navigate to your project > Usage and billing
+   - Click "Modify plan" and select the Blaze (pay-as-you-go) plan
+   - Follow the prompts to complete the upgrade
+
+2. **Set up Firebase Functions**:
+   ```bash
+   # From the project root
+   cd functions
+   npm install
+   cd ..
+   firebase deploy --only functions
+   ```
+
+3. **Enable push notifications in the code**:
+   - Open `src/services/pushNotificationService.ts`
+   - Change `const ENABLE_CLOUD_FUNCTIONS = false` to `true`
+   - Rebuild and redeploy the application
+
+4. **Get your VAPID Key**:
+   - In Firebase Console, go to Project Settings > Cloud Messaging
+   - Under "Web configuration", generate a new Web Push certificate
+   - Copy the public key and add it to your `.env` file as `VITE_FIREBASE_VAPID_KEY`
+
+Note: Even on the Blaze plan, Firebase offers a generous free tier with 2 million function invocations per month, so small to medium applications may not incur any charges.
+
+### 5. Development
 
 ```bash
 npm run dev
@@ -95,7 +137,7 @@ npm run dev
 
 The app will be available at `http://localhost:5173`
 
-### 5. Deployment
+### 6. Deployment
 
 1. Build the application:
 ```bash
@@ -108,7 +150,7 @@ npm install -g firebase-tools
 firebase login
 firebase init
 # Select Hosting and follow the prompts
-firebase deploy
+firebase deploy --only hosting
 ```
 
 ## Project Structure
@@ -121,6 +163,9 @@ src/
 ├── types/            # TypeScript type definitions
 ├── config/           # Configuration files
 └── App.tsx           # Main application component
+functions/
+├── src/              # Firebase Cloud Functions source code
+└── package.json      # Functions dependencies
 ```
 
 ## Contributing
