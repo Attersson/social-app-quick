@@ -8,6 +8,7 @@ import Feed from './components/Feed';
 import Profile from './components/Profile';
 import { UsersList } from './components/UsersList';
 import UserProfile from './components/UserProfile';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
 
 function App() {
   return (
@@ -23,6 +24,7 @@ function App() {
                 <Route path="/profile" element={<Profile />} />
                 <Route path="/users" element={<UsersList />} />
                 <Route path="/users/:userId" element={<UserProfile />} />
+                <Route path="/analytics" element={<AnalyticsDashboard />} />
               </Routes>
             </main>
           </div>
