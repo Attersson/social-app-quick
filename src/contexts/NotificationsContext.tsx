@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { FirebaseError } from 'firebase/app';
 import { db } from '../config/firebase';
+import { pushNotificationService } from '../services/pushNotificationService';
 import toast from 'react-hot-toast';
 
 interface NotificationsContextType {
@@ -31,6 +32,16 @@ const NotificationsContext = createContext<NotificationsContextType | undefined>
 export function NotificationsProvider({ children }: { children: React.ReactNode }) {
   const { user } = useAuth();
   const [notifications, setNotifications] = useState<Notification[]>([]);
+
+  // Request push notification permission when user logs in
+  useEffect(() => {
+    if (user) {
+      pushNotificationService.requestPermission(user.uid)
+        .catch(error => {
+          console.error('Error requesting notification permission:', error);
+        });
+    }
+  }, [user]);
 
   useEffect(() => {
     if (!user) {
@@ -155,10 +166,29 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
     if (!user) return;
 
     try {
+      // Create the in-app notification
       await addDoc(collection(db, 'notifications'), {
         ...notification,
         read: false,
         createdAt: serverTimestamp()
+      });
+
+      // Send push notification
+      const { title, body } = pushNotificationService.getNotificationContent(
+        notification.type,
+        notification.actorName,
+        notification.postContent
+      );
+
+      await pushNotificationService.sendPushNotification({
+        userId: notification.userId,
+        title,
+        body,
+        data: {
+          type: notification.type,
+          ...(notification.postId && { postId: notification.postId }),
+          ...(notification.commentId && { commentId: notification.commentId })
+        }
       });
     } catch (error) {
       console.error('Error adding notification:', error);
