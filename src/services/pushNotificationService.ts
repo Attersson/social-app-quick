@@ -4,6 +4,8 @@ import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../config/firebase';
 
 const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
+// Flag to enable/disable push notifications via Cloud Functions
+const ENABLE_CLOUD_FUNCTIONS = false; // Set to false since we're on the free plan
 
 export const pushNotificationService = {
   async requestPermission(userId: string) {
@@ -43,6 +45,18 @@ export const pushNotificationService = {
     body: string;
     data?: Record<string, string>;
   }) {
+    // If Cloud Functions are disabled, just log the notification and return
+    if (!ENABLE_CLOUD_FUNCTIONS) {
+      console.log('Push notification would be sent (Cloud Functions disabled):', {
+        userId,
+        title,
+        body,
+        data
+      });
+      // Return a resolved promise to prevent errors
+      return Promise.resolve();
+    }
+    
     try {
       const functions = getFunctions();
       const sendNotification = httpsCallable(functions, 'sendPushNotification');
@@ -57,7 +71,8 @@ export const pushNotificationService = {
       });
     } catch (error: unknown) {
       console.error('Error sending push notification:', error);
-      throw error;
+      // Don't throw the error, just log it - this prevents breaking the UI flow
+      console.log('Continuing without push notification due to error');
     }
   },
 

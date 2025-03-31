@@ -173,25 +173,30 @@ export function NotificationsProvider({ children }: { children: React.ReactNode 
         createdAt: serverTimestamp()
       });
 
-      // Send push notification
-      const { title, body } = pushNotificationService.getNotificationContent(
-        notification.type,
-        notification.actorName,
-        notification.postContent
-      );
+      // Try to send push notification, but don't let it break the flow if it fails
+      try {
+        const { title, body } = pushNotificationService.getNotificationContent(
+          notification.type,
+          notification.actorName,
+          notification.postContent
+        );
 
-      await pushNotificationService.sendPushNotification({
-        userId: notification.userId,
-        title,
-        body,
-        data: {
-          type: notification.type,
-          ...(notification.postId && { postId: notification.postId }),
-          ...(notification.commentId && { commentId: notification.commentId })
-        }
-      });
+        await pushNotificationService.sendPushNotification({
+          userId: notification.userId,
+          title,
+          body,
+          data: {
+            type: notification.type,
+            ...(notification.postId && { postId: notification.postId }),
+            ...(notification.commentId && { commentId: notification.commentId })
+          }
+        });
+      } catch (pushError) {
+        // Just log push notification errors, don't display them to the user
+        console.error('Push notification failed, but in-app notification was created:', pushError);
+      }
     } catch (error) {
-      console.error('Error adding notification:', error);
+      console.error('Error adding in-app notification:', error);
       if (error instanceof FirebaseError && error.code === 'unavailable') {
         toast.error('You are offline. The notification will be sent when you reconnect.');
       } else {

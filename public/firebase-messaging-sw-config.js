@@ -1,7 +1,7 @@
-// This file will be generated during build
+// This file is auto-generated
 const firebaseConfig = {
-  apiKey: "__FIREBASE_API_KEY__",
-  projectId: "__FIREBASE_PROJECT_ID__",
-  messagingSenderId: "__FIREBASE_MESSAGING_SENDER_ID__",
-  appId: "__FIREBASE_APP_ID__"
-}; 
+  apiKey: "AIzaSyDYdpFf9rRSIX5VExiGbRNsaG-t45vSXDU",
+  projectId: "social-app-quick",
+  messagingSenderId: "967157793331",
+  appId: "1:967157793331:web:d9a0937df7a5be8a431946"
+};
