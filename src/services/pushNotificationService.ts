@@ -1,5 +1,6 @@
 import { getMessaging, getToken } from 'firebase/messaging';
 import { doc, updateDoc } from 'firebase/firestore';
+import { getFunctions, httpsCallable } from 'firebase/functions';
 import { db } from '../config/firebase';
 
 const vapidKey = import.meta.env.VITE_FIREBASE_VAPID_KEY;
@@ -43,25 +44,17 @@ export const pushNotificationService = {
     data?: Record<string, string>;
   }) {
     try {
-      // Call your Firebase Cloud Function endpoint
-      const response = await fetch('/api/sendPushNotification', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          userId,
-          notification: {
-            title,
-            body,
-            data
-          }
-        })
+      const functions = getFunctions();
+      const sendNotification = httpsCallable(functions, 'sendPushNotification');
+      
+      await sendNotification({
+        userId,
+        notification: {
+          title,
+          body,
+          data
+        }
       });
-
-      if (!response.ok) {
-        throw new Error('Failed to send push notification');
-      }
     } catch (error: unknown) {
       console.error('Error sending push notification:', error);
       throw error;
