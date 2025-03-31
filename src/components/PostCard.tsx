@@ -15,6 +15,7 @@ import { formatDistanceToNow } from 'date-fns';
 import { getDateFromTimestamp } from '../utils/date';
 import { logAnalyticsEvent } from '../services/analyticsService';
 import { spamPreventionService } from '../services/spamPreventionService';
+import { createActivity } from '../services/activityService';
 
 interface PostCardProps {
   post: Post;
@@ -103,7 +104,7 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         timestamp: Timestamp.now()
       });
 
-      // Only send notification if the post author is not the current user
+      // Only send notification and create activity if the post author is not the current user
       if (!wasLiked && post.authorId !== user.uid) {
         await addNotification({
           userId: post.authorId,
@@ -113,6 +114,9 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
           postId: post.id,
           postContent: post.content.substring(0, 50) + (post.content.length > 50 ? '...' : '')
         });
+
+        // Create activity for the like action with only the required fields
+        await createActivity('like', post.authorId, { postId: post.id });
       }
 
       onUpdate();
@@ -171,6 +175,11 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         commentId: commentId,
         timestamp: Timestamp.now()
       });
+
+      // Create activity for the comment action
+      if (post.authorId !== user.uid) {
+        await createActivity('comment', post.authorId, { postId: post.id });
+      }
 
       setNewComment('');
       onUpdate();
@@ -236,60 +245,27 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
         // Build the Firestore update path
         const updatePath = ['comments', ...commentPath].join('.');
         
-        // Get the current replies array
-        const targetComment = currentPost.comments.reduce((found: Comment | null, comment: Comment) => {
-          if (found) return found;
-          if (comment.id === parentId) return comment;
-          if (comment.replies) {
-            const inReplies = comment.replies.find(r => r.id === parentId);
-            if (inReplies) return inReplies;
-          }
-          return null;
-        }, null);
-
-        const currentReplies = targetComment?.replies || [];
-        
-        // Update Firestore with the new reply
+        // Update the post with the new reply
         await updateDoc(postRef, {
-          [`${updatePath}.replies`]: [...currentReplies, newReply]
+          [`${updatePath}.replies`]: arrayUnion(newReply)
         });
 
-        // Apply optimistic update
-        const optimisticallyUpdatedComments = updatedComments.map(comment => {
-          if (comment.id === parentId) {
-            return {
-              ...comment,
-              replies: [...(comment.replies || []), newReply]
-            };
-          }
-          if (comment.replies && comment.replies.length > 0) {
-            return {
-              ...comment,
-              replies: comment.replies.map(reply => 
-                reply.id === parentId
-                  ? { ...reply, replies: [...(reply.replies || []), newReply] }
-                  : reply
-              )
-            };
-          }
-          return comment;
-        });
+        // Create activity for the reply action if the post author is not the current user
+        if (post.authorId !== user.uid) {
+          await createActivity('comment', post.authorId, { postId: post.id });
+        }
 
-        setCurrentPost(prev => ({
-          ...prev,
-          comments: optimisticallyUpdatedComments
-        }));
-
+        // Update local state
+        const updatedPost = {
+          ...currentPost,
+          comments: updatedComments
+        };
+        setCurrentPost(updatedPost);
         onUpdate();
-        toast.success('Reply added successfully!');
-      } else {
-        throw new Error('Parent comment not found');
       }
     } catch (error) {
       console.error('Error adding reply:', error);
       toast.error('Failed to add reply');
-      // Revert optimistic update on error
-      setCurrentPost(post);
     }
   };
 

@@ -30,6 +30,13 @@ service cloud.firestore {
       allow delete: if isAuthenticated() && isOwner(resource.data.authorId);
     }
 
+    match /activities/{activityId} {
+      allow read: if isAuthenticated();  // Allow all authenticated users to read activities
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && isOwner(resource.data.userId);
+      allow delete: if isAuthenticated() && isOwner(resource.data.userId);
+    }
+
     match /notifications/{notificationId} {
       allow read: if isAuthenticated() && isOwner(resource.data.userId);
       allow create: if isAuthenticated();

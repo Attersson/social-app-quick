@@ -3,6 +3,8 @@ import { useAuth } from '../contexts/AuthContext';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { spamPreventionService } from '../services/spamPreventionService';
+import { neo4jService } from '../services/neo4j';
+import { createActivity } from '../services/activityService';
 import toast from 'react-hot-toast';
 
 export default function PostForm({ onPostCreated }: { onPostCreated?: () => void }) {
@@ -29,7 +31,7 @@ export default function PostForm({ onPostCreated }: { onPostCreated?: () => void
 
     setIsSubmitting(true);
     try {
-      await addDoc(collection(db, 'posts'), {
+      const postRef = await addDoc(collection(db, 'posts'), {
         content: trimmedContent,
         authorId: user.uid,
         authorName: user.displayName || 'Anonymous',
@@ -38,6 +40,17 @@ export default function PostForm({ onPostCreated }: { onPostCreated?: () => void
         likes: [],
         comments: []
       });
+
+      // Get all followers and create activities for them
+      const followers = await neo4jService.getFollowers(user.uid);
+      await Promise.all(
+        followers.map(follower =>
+          createActivity('post', follower.id, { 
+            targetUserId: user.uid,
+            postId: postRef.id 
+          })
+        )
+      );
 
       setContent('');
       toast.success('Post created successfully!');

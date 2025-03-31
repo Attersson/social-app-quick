@@ -180,16 +180,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const provider = new GoogleAuthProvider();
     const result = await signInWithPopup(auth, provider);
     
-    // Create or update user document in Firestore
-    await setDoc(doc(db, 'users', result.user.uid), {
-      displayName: result.user.displayName,
-      email: result.user.email,
-      photoURL: 'https://i.pravatar.cc/150?img=4'
-    }, { merge: true });
-    
-    // Create or update Neo4j user node
-    await neo4jService.createUser(result.user.uid, result.user.displayName || '');
-    
+    // First sync the user data which will handle all necessary updates
     await syncUserData(result.user);
     setUser(result.user);
   };

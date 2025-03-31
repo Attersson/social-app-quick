@@ -1,7 +1,7 @@
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import NotificationsList from './NotificationsList';
-import { ChartBarIcon, ChatBubbleLeftRightIcon, UsersIcon } from '@heroicons/react/24/outline';
+import { ChartBarIcon, ChatBubbleLeftRightIcon, UsersIcon, BellIcon } from '@heroicons/react/24/outline';
 
 export default function Navbar() {
   const { user } = useAuth();
@@ -10,6 +10,7 @@ export default function Navbar() {
   const isUsersPage = location.pathname.startsWith('/users');
   const isProfilePage = location.pathname === '/profile';
   const isAnalyticsPage = location.pathname === '/analytics';
+  const isActivityPage = location.pathname === '/activity';
 
   const linkClasses = (isActive: boolean) =>
     `inline-flex items-center px-3 h-16 border-b-2 text-sm font-medium ${
@@ -43,6 +44,13 @@ export default function Navbar() {
                 >
                   <UsersIcon className="h-5 w-5 mr-1" />
                   Users
+                </Link>
+                <Link
+                  to="/activity"
+                  className={linkClasses(isActivityPage)}
+                >
+                  <BellIcon className="h-5 w-5 mr-1" />
+                  Activity
                 </Link>
                 <Link
                   to="/analytics"

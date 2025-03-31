@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { neo4jService } from '../services/neo4j';
 import { useNotifications } from '../contexts/NotificationsContext';
+import { createActivity } from '../services/activityService';
 import toast from 'react-hot-toast';
 
 interface FollowButtonProps {
@@ -60,6 +61,9 @@ export function FollowButton({ userId, className = '' }: FollowButtonProps) {
           actorId: user.uid,
           actorName: user.displayName || 'Anonymous'
         });
+
+        // Create activity for the unfollow action
+        await createActivity('unfollow', userId, { targetUserId: user.uid });
       } else {
         await neo4jService.followUser(user.uid, userId);
         toast.success('User followed');
@@ -71,6 +75,9 @@ export function FollowButton({ userId, className = '' }: FollowButtonProps) {
           actorId: user.uid,
           actorName: user.displayName || 'Anonymous'
         });
+
+        // Create activity for the follow action
+        await createActivity('follow', userId, { targetUserId: user.uid });
       }
     } catch (error) {
       // Revert optimistic update on error

@@ -9,6 +9,7 @@ import Profile from './components/Profile';
 import { UsersList } from './components/UsersList';
 import UserProfile from './components/UserProfile';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
+import { ActivityFeed } from './components/ActivityFeed/ActivityFeed';
 
 function App() {
   return (
@@ -25,6 +26,7 @@ function App() {
                 <Route path="/users" element={<UsersList />} />
                 <Route path="/users/:userId" element={<UserProfile />} />
                 <Route path="/analytics" element={<AnalyticsDashboard />} />
+                <Route path="/activity" element={<ActivityFeed />} />
               </Routes>
             </main>
           </div>
