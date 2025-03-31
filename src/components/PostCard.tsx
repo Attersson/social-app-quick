@@ -14,6 +14,7 @@ import toast from 'react-hot-toast';
 import { formatDistanceToNow } from 'date-fns';
 import { getDateFromTimestamp } from '../utils/date';
 import { logAnalyticsEvent } from '../services/analyticsService';
+import { spamPreventionService } from '../services/spamPreventionService';
 
 interface PostCardProps {
   post: Post;
@@ -66,12 +67,27 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       return;
     }
 
+    if (isLiking) return;
+
+    const wasLiked = isLiked;
+    
+    // Check for spam based on whether we're liking or unliking
+    const spamCheck = wasLiked 
+      ? await spamPreventionService.checkUnlikeSpam()
+      : await spamPreventionService.checkLikeSpam();
+      
+    if (!spamCheck.allowed) {
+      toast.error(spamCheck.message || 'Action not allowed');
+      return;
+    }
+
     setIsLiking(true);
-    const wasLiked = optimisticLikes.includes(user.uid);
-    setOptimisticLikes(wasLiked 
+    
+    // Optimistic update
+    const newLikes = wasLiked
       ? optimisticLikes.filter(id => id !== user.uid)
-      : [...optimisticLikes, user.uid]
-    );
+      : [...optimisticLikes, user.uid];
+    setOptimisticLikes(newLikes);
 
     try {
       const postRef = doc(db, 'posts', post.id);
@@ -88,10 +104,10 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
       });
 
       // Only send notification if the post author is not the current user
-      if (post.authorId !== user.uid) {
+      if (!wasLiked && post.authorId !== user.uid) {
         await addNotification({
           userId: post.authorId,
-          type: wasLiked ? 'unlike' : 'like',
+          type: 'like',
           actorId: user.uid,
           actorName: user.displayName || 'Anonymous',
           postId: post.id,
@@ -119,6 +135,13 @@ export default function PostCard({ post, onUpdate }: PostCardProps) {
     const trimmedComment = newComment.trim();
     if (!trimmedComment) {
       toast.error('Comment cannot be empty');
+      return;
+    }
+
+    // Check for spam
+    const spamCheck = await spamPreventionService.checkCommentSpam();
+    if (!spamCheck.allowed) {
+      toast.error(spamCheck.message || 'Action not allowed');
       return;
     }
 

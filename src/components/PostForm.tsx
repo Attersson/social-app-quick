@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { addDoc, collection, serverTimestamp } from 'firebase/firestore';
 import { db } from '../config/firebase';
+import { spamPreventionService } from '../services/spamPreventionService';
 import toast from 'react-hot-toast';
 
 export default function PostForm({ onPostCreated }: { onPostCreated?: () => void }) {
@@ -16,6 +17,13 @@ export default function PostForm({ onPostCreated }: { onPostCreated?: () => void
     const trimmedContent = content.trim();
     if (!trimmedContent) {
       toast.error('Post content cannot be empty');
+      return;
+    }
+
+    // Check for spam
+    const spamCheck = await spamPreventionService.checkPostSpam();
+    if (!spamCheck.allowed) {
+      toast.error(spamCheck.message || 'Action not allowed');
       return;
     }
 
