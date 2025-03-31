@@ -4,8 +4,9 @@ import { getActivitiesForUser, markActivityAsRead } from '../../services/activit
 import { ActivityWithUserData, ActivityType } from '../../types/Activity';
 import { formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router-dom';
-import { BellIcon, HeartIcon, ChatBubbleLeftIcon, UserPlusIcon, UserMinusIcon, DocumentTextIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
+import { BellIcon, HeartIcon, ChatBubbleLeftIcon, UserPlusIcon, UserMinusIcon, DocumentTextIcon, ChevronDownIcon, ChevronUpIcon, ArrowPathIcon } from '@heroicons/react/24/outline';
 import { aggregateActivities } from '../../utils/activityAggregation';
+import { activityService } from '../../services/activityService';
 
 const ACTIVITIES_PER_PAGE = 10;
 
@@ -28,6 +29,10 @@ export const ActivityFeed: React.FC = () => {
   const [showAggregated, setShowAggregated] = useState(true);
   const [expandedActivities, setExpandedActivities] = useState<string[]>([]);
   const observer = useRef<IntersectionObserver | null>(null);
+  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [hasNewActivities, setHasNewActivities] = useState(false);
+  const activitiesRef = useRef<ActivityWithUserData[]>([]);
+  const unsubscribeRef = useRef<(() => void) | null>(null);
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
     if (entries[0].isIntersecting && hasMore) {
@@ -263,11 +268,87 @@ export const ActivityFeed: React.FC = () => {
         originalActivities: [activity]
       }));
 
+  // Handle online/offline status
+  useEffect(() => {
+    const handleOnline = () => setIsOnline(true);
+    const handleOffline = () => setIsOnline(false);
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+
+  // Set up real-time listener for new activities
+  useEffect(() => {
+    if (!user) return;
+
+    const setupRealtimeListener = async () => {
+      try {
+        // Initial load of activities
+        const initialActivities = await getActivitiesForUser(user.uid, 10, 1, selectedType === 'all' ? undefined : selectedType, sortOrder);
+        setActivities(initialActivities);
+        activitiesRef.current = initialActivities;
+
+        // Set up real-time listener for new activities
+        unsubscribeRef.current = activityService.subscribeToNewActivities(
+          user.uid,
+          (newActivity) => {
+            setHasNewActivities(true);
+            activitiesRef.current = [newActivity, ...activitiesRef.current];
+          }
+        );
+      } catch (err) {
+        console.error('Error loading activities:', err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    setupRealtimeListener();
+
+    // Cleanup function
+    return () => {
+      if (unsubscribeRef.current) {
+        unsubscribeRef.current();
+      }
+    };
+  }, [user, selectedType, sortOrder]);
+
+  // Handle refresh
+  const handleRefresh = async () => {
+    if (!user) return;
+    
+    setLoading(true);
+    setHasNewActivities(false);
+    try {
+      const refreshedActivities = await getActivitiesForUser(user.uid, 10, 1, selectedType === 'all' ? undefined : selectedType, sortOrder);
+      setActivities(refreshedActivities);
+      activitiesRef.current = refreshedActivities;
+    } catch (err) {
+      console.error('Error refreshing activities:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto p-4">
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-bold">Activity Feed</h2>
         <div className="flex space-x-4">
+          {hasNewActivities && (
+            <button
+              onClick={handleRefresh}
+              className="flex items-center gap-1 px-3 py-1 bg-blue-500 text-white rounded-full hover:bg-blue-600 transition-colors"
+            >
+              <ArrowPathIcon className="w-4 h-4" />
+              New Activities
+            </button>
+          )}
           <select
             value={selectedType}
             onChange={(e) => setSelectedType(e.target.value as ActivityType | 'all')}
@@ -296,6 +377,23 @@ export const ActivityFeed: React.FC = () => {
           </button>
         </div>
       </div>
+
+      {!isOnline && (
+        <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+          <div className="flex">
+            <div className="flex-shrink-0">
+              <svg className="h-5 w-5 text-yellow-400" viewBox="0 0 20 20" fill="currentColor">
+                <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+              </svg>
+            </div>
+            <div className="ml-3">
+              <p className="text-sm text-yellow-700">
+                You are currently offline. Some activities may not be up to date.
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {processedActivities.length === 0 && !loading ? (
         <div className="text-center py-8">

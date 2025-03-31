@@ -10,15 +10,19 @@ import {
   doc,
   getDoc,
   updateDoc,
-  startAfter
+  startAfter,
+  onSnapshot,
+  DocumentData
 } from 'firebase/firestore';
 import { db } from '../config/firebase';
 import { Activity, ActivityType, ActivityWithUserData } from '../types/Activity';
+import { getUserData } from '../services/userService';
 
 const ACTIVITIES_COLLECTION = 'activities';
 
 interface UserData {
   displayName: string;
+  photoURL: string;
 }
 
 interface PostData {
@@ -113,7 +117,7 @@ export const getActivitiesForUser = async (
       ...activity,
       id: docSnapshot.id,
       userDisplayName: userData.displayName,
-      userPhotoURL: 'https://i.pravatar.cc/150?img=4'
+      userPhotoURL: userData.photoURL
     };
 
     if (activity.targetUserId) {
@@ -121,7 +125,7 @@ export const getActivitiesForUser = async (
       const targetUserData = targetUserDoc.data() as UserData;
       if (targetUserData) {
         activityWithUserData.targetUserDisplayName = targetUserData.displayName;
-        activityWithUserData.targetUserPhotoURL = 'https://i.pravatar.cc/150?img=4';
+        activityWithUserData.targetUserPhotoURL = targetUserData.photoURL;
       }
     }
 
@@ -152,4 +156,96 @@ export const markActivityAsRead = async (activityId: string): Promise<void> => {
   await updateDoc(activityRef, {
     read: true
   });
+};
+
+export const activityService = {
+  async getActivities(
+    userId: string,
+    pageSize: number = 10,
+    lastVisible?: DocumentData
+  ): Promise<ActivityWithUserData[]> {
+    try {
+      let q = query(
+        collection(db, ACTIVITIES_COLLECTION),
+        where('userId', '==', userId),
+        orderBy('createdAt', 'desc'),
+        limit(pageSize)
+      );
+
+      if (lastVisible) {
+        q = query(q, startAfter(lastVisible));
+      }
+
+      const snapshot = await getDocs(q);
+      const activities = await Promise.all(
+        snapshot.docs.map(async (doc) => {
+          const activity = doc.data() as Activity;
+          const userData = await getUserData(activity.userId);
+          return {
+            ...activity,
+            id: doc.id,
+            userDisplayName: userData.displayName,
+            userPhotoURL: userData.photoURL
+          };
+        })
+      );
+
+      return activities;
+    } catch (error) {
+      console.error('Error fetching activities:', error);
+      throw error;
+    }
+  },
+
+  subscribeToNewActivities(
+    userId: string,
+    onNewActivity: (activity: ActivityWithUserData) => void
+  ): () => void {
+    const q = query(
+      collection(db, ACTIVITIES_COLLECTION),
+      where('userId', '==', userId),
+      orderBy('createdAt', 'desc'),
+      limit(1)
+    );
+
+    return onSnapshot(q, async (snapshot) => {
+      snapshot.docChanges().forEach(async (change) => {
+        if (change.type === 'added') {
+          const activity = change.doc.data() as Activity;
+          const userData = await getUserData(activity.userId);
+          onNewActivity({
+            ...activity,
+            id: change.doc.id,
+            userDisplayName: userData.displayName,
+            userPhotoURL: userData.photoURL
+          });
+        }
+      });
+    });
+  },
+
+  async createActivity(
+    type: ActivityType,
+    userId: string,
+    data: {
+      targetUserId?: string;
+      postId?: string;
+      commentId?: string;
+    }
+  ): Promise<void> {
+    try {
+      const activity: Omit<Activity, 'id'> = {
+        type,
+        userId,
+        createdAt: Timestamp.now(),
+        read: false,
+        ...data
+      };
+
+      await addDoc(collection(db, ACTIVITIES_COLLECTION), activity);
+    } catch (error) {
+      console.error('Error creating activity:', error);
+      throw error;
+    }
+  }
 }; 
