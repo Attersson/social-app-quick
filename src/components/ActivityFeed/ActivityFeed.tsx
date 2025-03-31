@@ -4,7 +4,8 @@ import { getActivitiesForUser, markActivityAsRead } from '../../services/activit
 import { ActivityWithUserData, ActivityType } from '../../types/Activity';
 import { formatDistanceToNow } from 'date-fns';
 import { Link } from 'react-router-dom';
-import { BellIcon, HeartIcon, ChatBubbleLeftIcon, UserPlusIcon, UserMinusIcon, DocumentTextIcon } from '@heroicons/react/24/outline';
+import { BellIcon, HeartIcon, ChatBubbleLeftIcon, UserPlusIcon, UserMinusIcon, DocumentTextIcon, ChevronDownIcon, ChevronUpIcon } from '@heroicons/react/24/outline';
+import { aggregateActivities } from '../../utils/activityAggregation';
 
 const ACTIVITIES_PER_PAGE = 10;
 
@@ -24,6 +25,8 @@ export const ActivityFeed: React.FC = () => {
   const [page, setPage] = useState(1);
   const [selectedType, setSelectedType] = useState<ActivityType | 'all'>('all');
   const [sortOrder, setSortOrder] = useState<'desc' | 'asc'>('desc');
+  const [showAggregated, setShowAggregated] = useState(true);
+  const [expandedActivities, setExpandedActivities] = useState<string[]>([]);
   const observer = useRef<IntersectionObserver | null>(null);
 
   const handleObserver = useCallback((entries: IntersectionObserverEntry[]) => {
@@ -86,20 +89,44 @@ export const ActivityFeed: React.FC = () => {
     return <Icon className="h-5 w-5" />;
   };
 
-  const getActivityMessage = (activity: ActivityWithUserData) => {
+  const toggleActivityExpansion = (activityId: string) => {
+    setExpandedActivities(prev =>
+      prev.includes(activityId)
+        ? prev.filter(id => id !== activityId)
+        : [...prev, activityId]
+    );
+  };
+
+  const getActivityMessage = (activity: ActivityWithUserData & { count?: number; users?: { id: string; displayName: string; }[] }) => {
+    const isAggregated = activity.count && activity.count > 1;
+
     switch (activity.type) {
       case 'follow':
         return (
           <span className="flex items-center space-x-2">
             {getActivityIcon('follow')}
             <span>
-              <Link to={`/users/${activity.userId}`} className="font-semibold hover:underline">
-                {activity.userDisplayName}
-              </Link>
-              {' followed '}
-              <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
-                {activity.targetUserDisplayName}
-              </Link>
+              {isAggregated ? (
+                <>
+                  <Link to={`/users/${activity.users![0].id}`} className="font-semibold hover:underline">
+                    {activity.users![0].displayName}
+                  </Link>
+                  {` and ${activity.count! - 1} others followed `}
+                  <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
+                    {activity.targetUserDisplayName}
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to={`/users/${activity.userId}`} className="font-semibold hover:underline">
+                    {activity.userDisplayName}
+                  </Link>
+                  {' followed '}
+                  <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
+                    {activity.targetUserDisplayName}
+                  </Link>
+                </>
+              )}
             </span>
           </span>
         );
@@ -108,13 +135,27 @@ export const ActivityFeed: React.FC = () => {
           <span className="flex items-center space-x-2">
             {getActivityIcon('unfollow')}
             <span>
-              <Link to={`/users/${activity.userId}`} className="font-semibold hover:underline">
-                {activity.userDisplayName}
-              </Link>
-              {' unfollowed '}
-              <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
-                {activity.targetUserDisplayName}
-              </Link>
+              {isAggregated ? (
+                <>
+                  <Link to={`/users/${activity.users![0].id}`} className="font-semibold hover:underline">
+                    {activity.users![0].displayName}
+                  </Link>
+                  {` and ${activity.count! - 1} others unfollowed `}
+                  <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
+                    {activity.targetUserDisplayName}
+                  </Link>
+                </>
+              ) : (
+                <>
+                  <Link to={`/users/${activity.userId}`} className="font-semibold hover:underline">
+                    {activity.userDisplayName}
+                  </Link>
+                  {' unfollowed '}
+                  <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
+                    {activity.targetUserDisplayName}
+                  </Link>
+                </>
+              )}
             </span>
           </span>
         );
@@ -123,10 +164,21 @@ export const ActivityFeed: React.FC = () => {
           <span className="flex items-center space-x-2">
             {getActivityIcon('like')}
             <span>
-              <Link to={`/users/${activity.userId}`} className="font-semibold hover:underline">
-                {activity.userDisplayName}
-              </Link>
-              {' liked your post'}
+              {isAggregated ? (
+                <>
+                  <Link to={`/users/${activity.users![0].id}`} className="font-semibold hover:underline">
+                    {activity.users![0].displayName}
+                  </Link>
+                  {` and ${activity.count! - 1} others liked your post`}
+                </>
+              ) : (
+                <>
+                  <Link to={`/users/${activity.userId}`} className="font-semibold hover:underline">
+                    {activity.userDisplayName}
+                  </Link>
+                  {' liked your post'}
+                </>
+              )}
             </span>
           </span>
         );
@@ -135,16 +187,34 @@ export const ActivityFeed: React.FC = () => {
           <span className="flex items-center space-x-2">
             {getActivityIcon('comment')}
             <span>
-              <Link to={`/users/${activity.userId}`} className="font-semibold hover:underline">
-                {activity.userDisplayName}
-              </Link>
-              {' commented on your post'}
-              {activity.commentContent && (
-                <span className="block mt-1 text-sm text-gray-600 italic">
-                  "{activity.commentContent.length > 100 
-                    ? activity.commentContent.substring(0, 100) + '...' 
-                    : activity.commentContent}"
-                </span>
+              {isAggregated ? (
+                <>
+                  <Link to={`/users/${activity.users![0].id}`} className="font-semibold hover:underline">
+                    {activity.users![0].displayName}
+                  </Link>
+                  {` and ${activity.count! - 1} others commented on your post`}
+                  {activity.commentContent && (
+                    <span className="block mt-1 text-sm text-gray-600 italic">
+                      Latest: "{activity.commentContent.length > 100 
+                        ? activity.commentContent.substring(0, 100) + '...' 
+                        : activity.commentContent}"
+                    </span>
+                  )}
+                </>
+              ) : (
+                <>
+                  <Link to={`/users/${activity.userId}`} className="font-semibold hover:underline">
+                    {activity.userDisplayName}
+                  </Link>
+                  {' commented on your post'}
+                  {activity.commentContent && (
+                    <span className="block mt-1 text-sm text-gray-600 italic">
+                      "{activity.commentContent.length > 100 
+                        ? activity.commentContent.substring(0, 100) + '...' 
+                        : activity.commentContent}"
+                    </span>
+                  )}
+                </>
               )}
             </span>
           </span>
@@ -154,16 +224,27 @@ export const ActivityFeed: React.FC = () => {
           <span className="flex items-center space-x-2">
             {getActivityIcon('post')}
             <span>
-              <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
-                {activity.targetUserDisplayName}
-              </Link>
-              {' created a new post'}
-              {activity.postContent && (
-                <span className="block mt-1 text-sm text-gray-600">
-                  "{activity.postContent.length > 100 
-                    ? activity.postContent.substring(0, 100) + '...' 
-                    : activity.postContent}"
-                </span>
+              {isAggregated ? (
+                <>
+                  <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
+                    {activity.targetUserDisplayName}
+                  </Link>
+                  {` created ${activity.count} new posts`}
+                </>
+              ) : (
+                <>
+                  <Link to={`/users/${activity.targetUserId}`} className="font-semibold hover:underline">
+                    {activity.targetUserDisplayName}
+                  </Link>
+                  {' created a new post'}
+                  {activity.postContent && (
+                    <span className="block mt-1 text-sm text-gray-600">
+                      "{activity.postContent.length > 100 
+                        ? activity.postContent.substring(0, 100) + '...' 
+                        : activity.postContent}"
+                    </span>
+                  )}
+                </>
               )}
             </span>
           </span>
@@ -172,6 +253,15 @@ export const ActivityFeed: React.FC = () => {
         return '';
     }
   };
+
+  const processedActivities = showAggregated 
+    ? aggregateActivities(activities)
+    : activities.map(activity => ({
+        ...activity,
+        count: 1,
+        users: [{ id: activity.userId, displayName: activity.userDisplayName }],
+        originalActivities: [activity]
+      }));
 
   return (
     <div className="max-w-2xl mx-auto p-4">
@@ -198,20 +288,26 @@ export const ActivityFeed: React.FC = () => {
             <option value="desc">Newest First</option>
             <option value="asc">Oldest First</option>
           </select>
+          <button
+            onClick={() => setShowAggregated(!showAggregated)}
+            className="px-3 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+          >
+            {showAggregated ? 'Show Detailed' : 'Show Aggregated'}
+          </button>
         </div>
       </div>
 
-      {activities.length === 0 && !loading ? (
+      {processedActivities.length === 0 && !loading ? (
         <div className="text-center py-8">
           <BellIcon className="mx-auto h-12 w-12 text-gray-400" />
           <p className="mt-4 text-gray-500">No activities yet</p>
         </div>
       ) : (
         <div className="space-y-4">
-          {activities.map((activity, index) => (
+          {processedActivities.map((activity, index) => (
             <div
               key={activity.id}
-              ref={index === activities.length - 1 ? lastActivityElementRef : undefined}
+              ref={index === processedActivities.length - 1 ? lastActivityElementRef : undefined}
               className={`p-4 rounded-lg shadow-sm transition-all duration-200 ${
                 activity.read ? 'bg-white' : 'bg-blue-50'
               } hover:shadow-md border border-gray-100`}
@@ -232,6 +328,40 @@ export const ActivityFeed: React.FC = () => {
                   <p className="mt-1 text-xs text-gray-500">
                     {formatDistanceToNow(activity.createdAt.toDate(), { addSuffix: true })}
                   </p>
+                  {activity.count > 1 && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        toggleActivityExpansion(activity.id);
+                      }}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center"
+                    >
+                      {expandedActivities.includes(activity.id) ? (
+                        <>
+                          <ChevronUpIcon className="h-4 w-4 mr-1" />
+                          Hide details
+                        </>
+                      ) : (
+                        <>
+                          <ChevronDownIcon className="h-4 w-4 mr-1" />
+                          Show all {activity.count} activities
+                        </>
+                      )}
+                    </button>
+                  )}
+                  {expandedActivities.includes(activity.id) && activity.count > 1 && (
+                    <div className="mt-2 space-y-2 pl-4 border-l-2 border-gray-200">
+                      {activity.originalActivities.map((originalActivity) => (
+                        <div key={originalActivity.id} className="text-sm text-gray-600">
+                          <Link to={`/users/${originalActivity.userId}`} className="font-semibold hover:underline">
+                            {originalActivity.userDisplayName}
+                          </Link>
+                          {' • '}
+                          {formatDistanceToNow(originalActivity.createdAt.toDate(), { addSuffix: true })}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 {!activity.read && (
                   <div className="flex-shrink-0">
