@@ -137,7 +137,41 @@ npm run dev
 
 The app will be available at `http://localhost:5173`
 
-### 6. Deployment
+### 6. Environment Variables & Security
+
+> **Important:** The `.env` file contains sensitive information and is included in this repository for demonstration purposes only.
+
+#### Local Development
+- The `.env` file is used for local development only
+- In a real-world scenario, you should:
+  - Add `.env` to your `.gitignore` file
+  - Use `.env.example` with placeholder values as a template
+
+#### CI/CD & Production Deployment
+- For GitHub Actions workflows and production deployments, environment variables should be set as secrets:
+  - In the GitHub repository, go to Settings > Secrets and variables > Actions
+  - Add each environment variable from your `.env` file as a secret
+  - The `firebase-hosting-merge.yml` workflow is already configured to use these secrets
+
+#### GitHub Actions Workflows
+- The **merge workflow** (`firebase-hosting-merge.yml`) has access to the repository secrets and sets them as environment variables
+- The **pull request workflow** (`firebase-hosting-pull-request.yml`) does not have access to these secrets for security reasons, as PRs from forks could potentially expose them
+
+#### Example GitHub Secrets Configuration
+```
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your_auth_domain
+VITE_FIREBASE_PROJECT_ID=your_project_id
+VITE_FIREBASE_STORAGE_BUCKET=your_storage_bucket
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_messaging_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+VITE_FIREBASE_VAPID_KEY=your_vapid_key_for_push_notifications
+VITE_NEO4J_URI=your_neo4j_connection_string
+VITE_NEO4J_USER=neo4j
+VITE_NEO4J_PASSWORD=your_password
+```
+
+### 7. Deployment
 
 1. Build the application:
 ```bash
