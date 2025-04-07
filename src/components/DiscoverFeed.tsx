@@ -2,9 +2,47 @@ import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Post as PostType } from '../types/Post';
 import { recommendationService, RecommendedPost, RecommendationSource } from '../services/recommendationService';
+import { timeAsync } from '../utils/performanceTimer';
 import PostCard from './PostCard';
 import Breadcrumb from './Breadcrumb';
 import FollowRecommendations from './FollowRecommendations';
+
+// Function to load recommendations with performance tracking
+const loadRecommendationsWithTimer = async (
+  activeTab: RecommendationSource,
+  userId: string | undefined, 
+  excludePostIds: string[],
+  skipNetworkRequests: boolean
+): Promise<RecommendedPost[]> => {
+  if (activeTab === 'trending') {
+    // Skip parameter tells service to avoid network requests for double-mount in dev
+    return timeAsync(
+      'component.DiscoverFeed.loadTrendingPosts', 
+      () => recommendationService.getTrendingPosts(10, excludePostIds, skipNetworkRequests),
+      userId
+    );
+  } else {
+    if (userId) {
+      return timeAsync(
+        'component.DiscoverFeed.loadRecommendedPosts',
+        () => recommendationService.getRecommendedPosts(
+          userId, 
+          10, 
+          excludePostIds,
+          skipNetworkRequests
+        ),
+        userId
+      );
+    } else {
+      // Fallback to trending for non-logged in users
+      return timeAsync(
+        'component.DiscoverFeed.loadTrendingPostsAsFallback',
+        () => recommendationService.getTrendingPosts(10, excludePostIds, skipNetworkRequests),
+        'anonymous'
+      );
+    }
+  }
+};
 
 // Module-scoped flag to handle StrictMode double-mount
 let isFirstMount = true;
@@ -54,27 +92,16 @@ export default function DiscoverFeed() {
       if (!isMounted) return;
       
       try {
-        let recommendedPosts: RecommendedPost[] = [];
-        
         // For second mount in StrictMode, only use cached results without triggering network requests
         const skipNetworkRequests = hasFetchedRef.current && isFirstMount;
         
-        if (activeTab === 'trending') {
-          // Skip parameter tells service to avoid network requests for double-mount in dev
-          recommendedPosts = await recommendationService.getTrendingPosts(10, viewedPostIds, skipNetworkRequests);
-        } else {
-          if (user) {
-            recommendedPosts = await recommendationService.getRecommendedPosts(
-              user.uid, 
-              10, 
-              viewedPostIds,
-              skipNetworkRequests
-            );
-          } else {
-            // Fallback to trending for non-logged in users
-            recommendedPosts = await recommendationService.getTrendingPosts(10, viewedPostIds, skipNetworkRequests);
-          }
-        }
+        // Load recommendations with performance tracking
+        const recommendedPosts = await loadRecommendationsWithTimer(
+          activeTab,
+          user?.uid,
+          viewedPostIds,
+          skipNetworkRequests
+        );
 
         if (isMounted) {
           // Only update posts if we actually got results
@@ -108,7 +135,7 @@ export default function DiscoverFeed() {
     return () => {
       isMounted = false;
     };
-  }, [user?.uid, activeTab, refreshTrigger]); // Added refreshTrigger to dependency array
+  }, [user?.uid, activeTab, refreshTrigger]);
 
   const handlePostUpdate = () => {
     // Keep track of viewed posts to avoid showing them again

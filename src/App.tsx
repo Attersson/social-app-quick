@@ -1,8 +1,8 @@
-import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationsProvider } from './contexts/NotificationsContext';
 import { Toaster } from 'react-hot-toast';
-import { useEffect } from 'react';
+import { useEffect, ReactNode } from 'react';
 import Navbar from './components/Navbar';
 import AuthUI from './components/AuthUI';
 import Feed from './components/Feed';
@@ -12,7 +12,19 @@ import UserProfile from './components/UserProfile';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import { ActivityFeed } from './components/ActivityFeed/ActivityFeed';
 import DiscoverFeed from './components/DiscoverFeed';
+import PerformanceDashboard from './components/PerformanceDashboard';
 import { recommendationService } from './services/recommendationService';
+
+// Protected route component that requires authentication
+function ProtectedRoute({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
+  
+  if (!user) {
+    return <Navigate to="/auth" replace />;
+  }
+  
+  return <>{children}</>;
+}
 
 // Separate component to use the auth context
 function AppContent() {
@@ -47,6 +59,11 @@ function AppContent() {
             <Route path="/analytics" element={<AnalyticsDashboard />} />
             <Route path="/activity" element={<ActivityFeed />} />
             <Route path="/discover" element={<DiscoverFeed />} />
+            <Route path="/performance" element={
+              <ProtectedRoute>
+                <PerformanceDashboard />
+              </ProtectedRoute>
+            } />
           </Routes>
         </main>
       </div>

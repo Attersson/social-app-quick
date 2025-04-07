@@ -1,4 +1,5 @@
 import neo4j, { Driver, Session, Record } from 'neo4j-driver';
+import { timeAsync } from '../utils/performanceTimer';
 
 // Neo4j connection configuration
 const NEO4J_URI = import.meta.env.VITE_NEO4J_URI;
@@ -318,49 +319,56 @@ class Neo4jService {
 
   // Get recommended post authors based on social graph
   async getRecommendedContentCreators(userId: string, limit: number = 20): Promise<{id: string, score: number, reason: string}[]> {
-    const session = await this.getSession();
-    try {
-      // Combined query for different types of social recommendations
-      const result = await session.run(
-        `
-        // Find content creators followed by people user follows (second-degree connections)
-        MATCH (user:User {id: $userId})-[:FOLLOWS]->(friend:User)-[:FOLLOWS]->(contentCreator:User)
-        WHERE NOT (user)-[:FOLLOWS]->(contentCreator)
-        AND contentCreator.id <> $userId
+    return timeAsync('neo4j.getRecommendedContentCreators.total', async () => {
+      const session = await this.getSession();
+      try {
+        // Combined query for different types of social recommendations
+        const queryResult = await timeAsync('neo4j.getRecommendedContentCreators.query', async () => {
+          return session.run(
+            `
+            // Find content creators followed by people user follows (second-degree connections)
+            MATCH (user:User {id: $userId})-[:FOLLOWS]->(friend:User)-[:FOLLOWS]->(contentCreator:User)
+            WHERE NOT (user)-[:FOLLOWS]->(contentCreator)
+            AND contentCreator.id <> $userId
+            
+            WITH contentCreator, count(DISTINCT friend) as commonFollowers, 'followed_by_friends' as reason
+            
+            RETURN contentCreator.id as id,
+                 commonFollowers as score,
+                 reason
+            
+            UNION
+            
+            // Find popular creators among user's extended network
+            MATCH (user:User {id: $userId})-[:FOLLOWS]->(:User)<-[:FOLLOWS]-(mutualFollower:User)-[:FOLLOWS]->(popularCreator:User)
+            WHERE NOT (user)-[:FOLLOWS]->(popularCreator)
+            AND popularCreator.id <> $userId
+            
+            WITH popularCreator, count(DISTINCT mutualFollower) as sharedFollowers, 'popular_in_network' as reason
+            
+            RETURN popularCreator.id as id,
+                 sharedFollowers as score,
+                 reason
+            
+            ORDER BY score DESC, id
+            LIMIT toInteger($limit)
+            `,
+            { userId, limit }
+          );
+        }, userId);
         
-        WITH contentCreator, count(DISTINCT friend) as commonFollowers, 'followed_by_friends' as reason
-        
-        RETURN contentCreator.id as id,
-               commonFollowers as score,
-               reason
-        
-        UNION
-        
-        // Find popular creators among user's extended network
-        MATCH (user:User {id: $userId})-[:FOLLOWS]->(:User)<-[:FOLLOWS]-(mutualFollower:User)-[:FOLLOWS]->(popularCreator:User)
-        WHERE NOT (user)-[:FOLLOWS]->(popularCreator)
-        AND popularCreator.id <> $userId
-        
-        WITH popularCreator, count(DISTINCT mutualFollower) as sharedFollowers, 'popular_in_network' as reason
-        
-        RETURN popularCreator.id as id,
-               sharedFollowers as score,
-               reason
-        
-        ORDER BY score DESC, id
-        LIMIT toInteger($limit)
-        `,
-        { userId, limit }
-      );
-      
-      return result.records.map(record => ({
-        id: record.get('id'),
-        score: record.get('score').toNumber(),
-        reason: record.get('reason')
-      }));
-    } finally {
-      await session.close();
-    }
+        // Process the results
+        return await timeAsync('neo4j.getRecommendedContentCreators.processing', async () => {
+          return queryResult.records.map(record => ({
+            id: record.get('id'),
+            score: record.get('score').toNumber(),
+            reason: record.get('reason')
+          }));
+        }, userId);
+      } finally {
+        await session.close();
+      }
+    }, userId);
   }
 
   // Get social distance between two users (for content relevance)

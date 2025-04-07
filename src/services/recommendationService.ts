@@ -10,6 +10,7 @@ import {
 import { db } from '../config/firebase';
 import { neo4jService, registerCacheInvalidationCallback } from './neo4j';
 import { Post } from '../types/Post';
+import { timeAsync, startTimer } from '../utils/performanceTimer';
 
 // Interface for recommended content with metadata
 export interface RecommendedPost extends Post {
@@ -116,62 +117,74 @@ class RecommendationService {
     excludePostIds: string[] = [],
     skipNetworkRequests: boolean = false
   ): Promise<RecommendedPost[]> {
-    // If no user ID, fall back to trending posts (which might also be cached)
-    if (!userId) {
-      return this.getTrendingPosts(count, excludePostIds, skipNetworkRequests);
-    }
+    // Start overall performance timer
+    const timer = startTimer(`getRecommendedPosts(${count})`, userId);
     
-    // Check cache first - use a stable key without excluded posts
-    const cacheKey = this.getCacheKey(userId, 'social_network', count);
-    const cachedResult = this.recommendationsCache.get(cacheKey);
-    
-    if (cachedResult && this.isCacheValid(cachedResult)) {
-      console.log(`Cache hit for recommendations`);
+    try {
+      // If no user ID, fall back to trending posts (which might also be cached)
+      if (!userId) {
+        const result = await this.getTrendingPosts(count, excludePostIds, skipNetworkRequests);
+        timer.stop('success', { source: 'trending_fallback', reason: 'no_user_id' });
+        return result;
+      }
       
-      // Filter out excluded posts from the cached results
-      if (excludePostIds.length > 0) {
-        const filteredResults = cachedResult.data.filter(post => 
-          !excludePostIds.includes(post.id)
-        );
-        
-        // If we have enough posts after filtering, return them
-        if (filteredResults.length >= count / 2) {
-          return filteredResults.slice(0, count);
-        }
-        // Otherwise, we need to fetch new posts (cache miss)
-      } else {
-        // No posts to exclude, return the cached data directly
-        return cachedResult.data.slice(0, count);
-      }
-    } else {
-      if (!cachedResult) {
-        console.log(`Cache miss for recommendations - no cache entry`);
-      } else {
-        console.log('Cache miss for recommendations - expired cache');
-      }
-    }
-    
-    // If we're skipping network requests (for StrictMode double-mount in dev)
-    // Return empty array instead of making network requests
-    if (skipNetworkRequests) {
-      // Check if we have any cached posts already - return those instead of empty array
+      // Check cache first - use a stable key without excluded posts
+      const cacheKey = this.getCacheKey(userId, 'social_network', count);
+      const cachedResult = this.recommendationsCache.get(cacheKey);
+      
       if (cachedResult && this.isCacheValid(cachedResult)) {
-        // Return filtered cache results
+        // Filter out excluded posts from the cached results
         if (excludePostIds.length > 0) {
           const filteredResults = cachedResult.data.filter(post => 
             !excludePostIds.includes(post.id)
           );
-          return filteredResults.slice(0, count);
+          
+          // If we have enough posts after filtering, return them
+          if (filteredResults.length >= count / 2) {
+            timer.stop('success', { source: 'cache', filtered: true });
+            return filteredResults.slice(0, count);
+          }
+          // Otherwise, we need to fetch new posts (cache miss)
+        } else {
+          // No posts to exclude, return the cached data directly
+          timer.stop('success', { source: 'cache', filtered: false });
+          return cachedResult.data.slice(0, count);
         }
-        return cachedResult.data.slice(0, count);
+      } else {
+        if (!cachedResult) {
+          // No cache entry
+        } else {
+          // Expired cache
+        }
       }
-      // Otherwise return empty array
-      return [];
-    }
-    
-    try {
+      
+      // If we're skipping network requests (for StrictMode double-mount in dev)
+      // Return empty array instead of making network requests
+      if (skipNetworkRequests) {
+        // Check if we have any cached posts already - return those instead of empty array
+        if (cachedResult && this.isCacheValid(cachedResult)) {
+          // Return filtered cache results
+          if (excludePostIds.length > 0) {
+            const filteredResults = cachedResult.data.filter(post => 
+              !excludePostIds.includes(post.id)
+            );
+            timer.stop('success', { source: 'cache_strict_mode', filtered: true });
+            return filteredResults.slice(0, count);
+          }
+          timer.stop('success', { source: 'cache_strict_mode', filtered: false });
+          return cachedResult.data.slice(0, count);
+        }
+        // Otherwise return empty array
+        timer.stop('success', { source: 'empty_strict_mode' });
+        return [];
+      }
+      
       // 1. Get recommended content creators from social graph
-      const recommendedCreators = await neo4jService.getRecommendedContentCreators(userId);
+      const recommendedCreators = await timeAsync(
+        'neo4j.getRecommendedContentCreators', 
+        () => neo4jService.getRecommendedContentCreators(userId),
+        userId
+      );
       
       // 2. Fetch recent posts from those creators
       const creatorIds = recommendedCreators.map(creator => creator.id);
@@ -189,6 +202,7 @@ class RecommendationService {
           source: 'social_network' // Store as social_network type to match the cache key
         });
         
+        timer.stop('success', { source: 'trending_fallback', reason: 'no_creators' });
         return trendingPosts;
       }
       
@@ -200,7 +214,13 @@ class RecommendationService {
         limit(count * 3) // Fetch more than needed to account for filtering
       );
       
-      const postDocs = await getDocs(postsQuery);
+      // Time the Firestore query
+      const postDocs = await timeAsync(
+        'firestore.getRecommendedPosts', 
+        () => getDocs(postsQuery),
+        userId
+      );
+      
       let posts = postDocs.docs.map(doc => {
         const data = doc.data();
         return {
@@ -217,7 +237,11 @@ class RecommendationService {
       }
       
       // 3. Rank posts based on multiple factors
-      const scoredPosts = await this.rankPosts(posts, recommendedCreators);
+      const scoredPosts = await timeAsync(
+        'rankPosts', 
+        () => this.rankPosts(posts, recommendedCreators),
+        userId
+      );
       
       // Store more posts in cache (up to MAX_CACHED_POSTS)
       const postsToCache = scoredPosts.slice(0, this.MAX_CACHED_POSTS);
@@ -230,8 +254,11 @@ class RecommendationService {
       
       // 4. Return top recommended posts (only the requested count)
       const result = scoredPosts.slice(0, count);
+      timer.stop('success', { source: 'fresh', postsCount: result.length });
       return result;
     } catch (error) {
+      timer.stop('error', { error: error instanceof Error ? error.message : String(error) });
+      // Keep error logs
       console.error('Error getting recommended posts:', error);
       
       // Get trending posts as fallback
@@ -239,7 +266,7 @@ class RecommendationService {
       
       // Cache these trending posts as recommendations for this user
       // This ensures future requests still hit the cache even after errors
-      this.recommendationsCache.set(cacheKey, {
+      this.recommendationsCache.set(this.getCacheKey(userId, 'social_network', count), {
         data: trendingPosts.slice(0, this.MAX_CACHED_POSTS),
         timestamp: Date.now(),
         userId,
@@ -256,55 +283,61 @@ class RecommendationService {
     excludePostIds: string[] = [],
     skipNetworkRequests: boolean = false
   ): Promise<RecommendedPost[]> {
-    // For trending posts, use a different cache key
-    const cacheKey = this.getCacheKey('trending', 'trending', count);
-    const cachedResult = this.recommendationsCache.get(cacheKey);
+    // Start overall performance timer
+    const timer = startTimer(`getTrendingPosts(${count})`, 'system');
     
-    if (cachedResult && this.isCacheValid(cachedResult)) {
-      console.log(`Cache hit for trending posts`);
+    try {
+      // For trending posts, use a different cache key
+      const cacheKey = this.getCacheKey('trending', 'trending', count);
+      const cachedResult = this.recommendationsCache.get(cacheKey);
       
-      // Filter out excluded posts from the cached results
-      if (excludePostIds.length > 0) {
-        const filteredResults = cachedResult.data.filter(post => 
-          !excludePostIds.includes(post.id)
-        );
-        
-        // If we have enough posts after filtering, return them
-        if (filteredResults.length >= count / 2) {
-          return filteredResults.slice(0, count);
-        }
-        // Otherwise, we need to fetch new posts (cache miss)
-      } else {
-        // No posts to exclude, return the cached data directly
-        return cachedResult.data.slice(0, count);
-      }
-    } else {
-      if (!cachedResult) {
-        console.log(`Cache miss for trending posts - no cache entry`);
-      } else {
-        console.log('Cache miss for trending posts - expired cache');
-      }
-    }
-    
-    // If we're skipping network requests (for StrictMode double-mount in dev)
-    // Return empty array instead of making network requests
-    if (skipNetworkRequests) {
-      // Check if we have any cached posts already - return those instead of empty array
       if (cachedResult && this.isCacheValid(cachedResult)) {
-        // Return filtered cache results
+        // Filter out excluded posts from the cached results
         if (excludePostIds.length > 0) {
           const filteredResults = cachedResult.data.filter(post => 
             !excludePostIds.includes(post.id)
           );
-          return filteredResults.slice(0, count);
+          
+          // If we have enough posts after filtering, return them
+          if (filteredResults.length >= count / 2) {
+            timer.stop('success', { source: 'cache', filtered: true });
+            return filteredResults.slice(0, count);
+          }
+          // Otherwise, we need to fetch new posts (cache miss)
+        } else {
+          // No posts to exclude, return the cached data directly
+          timer.stop('success', { source: 'cache', filtered: false });
+          return cachedResult.data.slice(0, count);
         }
-        return cachedResult.data.slice(0, count);
+      } else {
+        if (!cachedResult) {
+          // No cache entry
+        } else {
+          // Expired cache
+        }
       }
-      // Otherwise return empty array
-      return [];
-    }
-    
-    try {
+      
+      // If we're skipping network requests (for StrictMode double-mount in dev)
+      // Return empty array instead of making network requests
+      if (skipNetworkRequests) {
+        // Check if we have any cached posts already - return those instead of empty array
+        if (cachedResult && this.isCacheValid(cachedResult)) {
+          // Return filtered cache results
+          if (excludePostIds.length > 0) {
+            const filteredResults = cachedResult.data.filter(post => 
+              !excludePostIds.includes(post.id)
+            );
+            timer.stop('success', { source: 'cache_strict_mode', filtered: true });
+            return filteredResults.slice(0, count);
+          }
+          timer.stop('success', { source: 'cache_strict_mode', filtered: false });
+          return cachedResult.data.slice(0, count);
+        }
+        // Otherwise return empty array
+        timer.stop('success', { source: 'empty_strict_mode' });
+        return [];
+      }
+      
       // For trending, we'll use engagement metrics (likes count, comments count, recency)
       const postsQuery = query(
         collection(db, 'posts'),
@@ -312,7 +345,13 @@ class RecommendationService {
         limit(100) // Fetch more posts to rank them (increased from 50)
       );
       
-      const postDocs = await getDocs(postsQuery);
+      // Time the Firestore query
+      const postDocs = await timeAsync(
+        'firestore.getTrendingPosts', 
+        () => getDocs(postsQuery),
+        'system'
+      );
+      
       let posts = postDocs.docs.map(doc => {
         const data = doc.data();
         return {
@@ -328,32 +367,39 @@ class RecommendationService {
         posts = posts.filter(post => !excludePostIds.includes(post.id));
       }
       
-      // Score posts by engagement and recency
-      const scoredPosts = posts.map(post => {
-        const likesCount = post.likes?.length || 0;
-        const commentsCount = post.comments?.length || 0;
-        
-        // Calculate hours since post creation
-        const createdAtDate = post.createdAt instanceof Timestamp ? post.createdAt.toDate() : post.createdAt;
-        const hoursSinceCreation = 
-          (new Date().getTime() - createdAtDate.getTime()) / (1000 * 60 * 60);
-        
-        // Simple trending score formula: (likes + comments*1.5) / hours^0.8
-        // This gives recent posts with high engagement more weight
-        const trendingScore = hoursSinceCreation > 0 
-          ? (likesCount + commentsCount * 1.5) / Math.pow(hoursSinceCreation, 0.8)
-          : (likesCount + commentsCount * 1.5);
-          
-        return {
-          ...post,
-          recommendationScore: trendingScore,
-          recommendationReason: 'trending'
-        };
-      });
+      // Time the scoring operation
+      const scoredPosts = await timeAsync<RecommendedPost[]>(
+        'scoreTrendingPosts', 
+        () => Promise.resolve().then(() => {
+          // Score posts by engagement and recency
+          return posts.map(post => {
+            const likesCount = post.likes?.length || 0;
+            const commentsCount = post.comments?.length || 0;
+            
+            // Calculate hours since post creation
+            const createdAtDate = post.createdAt instanceof Timestamp ? post.createdAt.toDate() : post.createdAt;
+            const hoursSinceCreation = 
+              (new Date().getTime() - createdAtDate.getTime()) / (1000 * 60 * 60);
+            
+            // Simple trending score formula: (likes + comments*1.5) / hours^0.8
+            // This gives recent posts with high engagement more weight
+            const trendingScore = hoursSinceCreation > 0 
+              ? (likesCount + commentsCount * 1.5) / Math.pow(hoursSinceCreation, 0.8)
+              : (likesCount + commentsCount * 1.5);
+              
+            return {
+              ...post,
+              recommendationScore: trendingScore,
+              recommendationReason: 'trending'
+            };
+          });
+        }),
+        'system'
+      );
       
       // Sort by trending score
       const sortedPosts = scoredPosts
-        .sort((a, b) => b.recommendationScore - a.recommendationScore);
+        .sort((a: RecommendedPost, b: RecommendedPost) => b.recommendationScore - a.recommendationScore);
       
       // Store more posts in cache (up to MAX_CACHED_POSTS)
       const postsToCache = sortedPosts.slice(0, this.MAX_CACHED_POSTS);
@@ -366,8 +412,11 @@ class RecommendationService {
         
       // Return only the requested count
       const result = sortedPosts.slice(0, count);
+      timer.stop('success', { source: 'fresh', postsCount: result.length });
       return result;
     } catch (error) {
+      timer.stop('error', { error: error instanceof Error ? error.message : String(error) });
+      // Keep error logs
       console.error('Error getting trending posts:', error);
       return [];
     }

@@ -25,6 +25,35 @@ A modern social media application built with React, Firebase, and Neo4j. Feature
 - **Styling**: Tailwind CSS
 - **UI Components**: Heroicons
 - **Toast Notifications**: React Hot Toast
+- **Performance Monitoring**: Built-in performance tracking
+
+## Performance Monitoring
+
+The application includes a built-in performance monitoring system that helps track and analyze the execution times of various operations:
+
+### Features
+
+- **Real-time Timing**: Precisely measures execution time of database queries, API calls, and component renders
+- **Operation Grouping**: Categorizes operations for easier analysis
+- **Performance Dashboard**: Available at `/performance` in development environments
+- **Detailed Metrics**: Tracks min/max/average execution times for each operation type
+- **Analytics Integration**: Logs performance metrics to Firebase Analytics in production (when configured)
+
+### Key Metrics Tracked
+
+- Neo4j query performance for social graph operations
+- Firestore database query times
+- Recommendation service cache performance
+- React component rendering times
+
+### Usage
+
+1. **View Performance Dashboard**: Navigate to `/performance` in your browser
+2. **Filter by Operation**: Use the search box to filter for specific operations
+3. **Refresh**: Click the refresh button to update metrics in real-time
+4. **Sort by Time**: Click on column headers to sort by execution time
+
+The dashboard is designed for development use and does not persist data between page reloads.
 
 ## Prerequisites
 
