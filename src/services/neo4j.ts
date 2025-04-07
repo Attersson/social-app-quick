@@ -5,6 +5,15 @@ const NEO4J_URI = import.meta.env.VITE_NEO4J_URI;
 const NEO4J_USER = import.meta.env.VITE_NEO4J_USER;
 const NEO4J_PASSWORD = import.meta.env.VITE_NEO4J_PASSWORD;
 
+// Store callbacks to invalidate caches
+type InvalidateCacheCallback = (userId: string) => void;
+const cacheInvalidationCallbacks: InvalidateCacheCallback[] = [];
+
+// Add a function to register cache invalidation callbacks
+export function registerCacheInvalidationCallback(callback: InvalidateCacheCallback) {
+  cacheInvalidationCallbacks.push(callback);
+}
+
 interface Follower {
   id: string;
   displayName: string;
@@ -105,6 +114,13 @@ class Neo4jService {
       );
 
       console.log(`Created FOLLOWS relationship from ${followerId} to ${followingId}`);
+      
+      // Notify registered services to invalidate their caches
+      cacheInvalidationCallbacks.forEach(callback => {
+        callback(followerId);
+        callback(followingId);
+      });
+      
       return result.records.length > 0;
     } catch (error) {
       console.error('Error in followUser:', error);
@@ -125,6 +141,13 @@ class Neo4jService {
         { followerId, followingId }
       );
       console.log(`Deleted FOLLOWS relationship from ${followerId} to ${followingId}`);
+      
+      // Notify registered services to invalidate their caches
+      cacheInvalidationCallbacks.forEach(callback => {
+        callback(followerId);
+        callback(followingId);
+      });
+      
       return result.records.length > 0;
     } finally {
       await session.close();

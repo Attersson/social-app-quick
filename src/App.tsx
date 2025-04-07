@@ -1,7 +1,8 @@
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { NotificationsProvider } from './contexts/NotificationsContext';
 import { Toaster } from 'react-hot-toast';
+import { useEffect } from 'react';
 import Navbar from './components/Navbar';
 import AuthUI from './components/AuthUI';
 import Feed from './components/Feed';
@@ -11,10 +12,26 @@ import UserProfile from './components/UserProfile';
 import AnalyticsDashboard from './components/AnalyticsDashboard';
 import { ActivityFeed } from './components/ActivityFeed/ActivityFeed';
 import DiscoverFeed from './components/DiscoverFeed';
+import { recommendationService } from './services/recommendationService';
 
 // Separate component to use the auth context
 function AppContent() {
   const { user } = useAuth();
+  const location = useLocation();
+  
+  // Preload the recommendation cache when a user logs in
+  useEffect(() => {
+    if (user) {
+      recommendationService.preloadCache(user.uid);
+    }
+  }, [user?.uid]);
+  
+  // Check cache when navigating to Discover
+  useEffect(() => {
+    if (location.pathname === '/discover') {
+      recommendationService.logCacheStatus();
+    }
+  }, [location.pathname]);
   
   return (
     <NotificationsProvider user={user}>

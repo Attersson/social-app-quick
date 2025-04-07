@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { Post as PostType } from '../types/Post';
 import { recommendationService, RecommendedPost, RecommendationSource } from '../services/recommendationService';
@@ -6,50 +6,128 @@ import PostCard from './PostCard';
 import Breadcrumb from './Breadcrumb';
 import FollowRecommendations from './FollowRecommendations';
 
+// Module-scoped flag to handle StrictMode double-mount
+let isFirstMount = true;
+
 export default function DiscoverFeed() {
   const { user } = useAuth();
   const [posts, setPosts] = useState<RecommendedPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<RecommendationSource>('social_network');
-  const [viewedPostIds, setViewedPostIds] = useState<string[]>([]);
+  const [refreshTrigger, setRefreshTrigger] = useState(0); // Add a state to force refresh
+  const hasFetchedRef = useRef(false); // Track if we've already fetched data
+  
+  // Use localStorage to preserve viewed posts between navigations
+  const [viewedPostIds, setViewedPostIds] = useState<string[]>(() => {
+    // Initialize from localStorage if available
+    const savedIds = localStorage.getItem('discoveredViewedPosts');
+    return savedIds ? JSON.parse(savedIds) : [];
+  });
+  
+  // Reset the first mount flag when component unmounts
+  useLayoutEffect(() => {
+    // Only run on component mount
+    const wasFirstMount = isFirstMount;
+    
+    return () => {
+      // This gets executed when the component unmounts
+      isFirstMount = wasFirstMount; // Preserve the value for remounts
+    };
+  }, []);
 
-  // Load recommended posts
+  // Save viewedPostIds to localStorage when it changes
   useEffect(() => {
-    const loadRecommendedPosts = async () => {
+    localStorage.setItem('discoveredViewedPosts', JSON.stringify(viewedPostIds));
+  }, [viewedPostIds]);
+
+  // Load recommended posts when needed
+  useEffect(() => {
+    let isMounted = true;
+    
+    // Only set loading on first mount or tab changes
+    if (!hasFetchedRef.current || !isFirstMount) {
       setLoading(true);
+    }
+    
+    // Function to load recommendations
+    const loadRecommendedPosts = async () => {
+      if (!isMounted) return;
+      
       try {
         let recommendedPosts: RecommendedPost[] = [];
-
+        
+        // For second mount in StrictMode, only use cached results without triggering network requests
+        const skipNetworkRequests = hasFetchedRef.current && isFirstMount;
+        
         if (activeTab === 'trending') {
-          recommendedPosts = await recommendationService.getTrendingPosts(10, viewedPostIds);
+          // Skip parameter tells service to avoid network requests for double-mount in dev
+          recommendedPosts = await recommendationService.getTrendingPosts(10, viewedPostIds, skipNetworkRequests);
         } else {
           if (user) {
             recommendedPosts = await recommendationService.getRecommendedPosts(
               user.uid, 
               10, 
-              viewedPostIds
+              viewedPostIds,
+              skipNetworkRequests
             );
           } else {
             // Fallback to trending for non-logged in users
-            recommendedPosts = await recommendationService.getTrendingPosts(10, viewedPostIds);
+            recommendedPosts = await recommendationService.getTrendingPosts(10, viewedPostIds, skipNetworkRequests);
           }
         }
 
-        setPosts(recommendedPosts);
+        if (isMounted) {
+          // Only update posts if we actually got results
+          // In the StrictMode double-mount case with skipNetworkRequests=true, we might get empty results
+          if (recommendedPosts.length > 0) {
+            setPosts(recommendedPosts);
+          }
+          
+          // After a successful load, mark as fetched
+          if (!hasFetchedRef.current) {
+            hasFetchedRef.current = true;
+          }
+          
+          // After first real mount is complete
+          if (isFirstMount) {
+            isFirstMount = false;
+          }
+        }
       } catch (error) {
         console.error('Error loading recommended posts:', error);
       } finally {
-        setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+        }
       }
     };
 
+    // Don't skip the load entirely - we still need to update loading state
     loadRecommendedPosts();
-  }, [user, activeTab, viewedPostIds]);
+    
+    return () => {
+      isMounted = false;
+    };
+  }, [user?.uid, activeTab, refreshTrigger]); // Added refreshTrigger to dependency array
 
   const handlePostUpdate = () => {
     // Keep track of viewed posts to avoid showing them again
     const currentPostIds = posts.map(post => post.id);
-    setViewedPostIds(prev => [...prev, ...currentPostIds]);
+    setViewedPostIds(prev => {
+      const newIds = [...prev, ...currentPostIds.filter(id => !prev.includes(id))];
+      return newIds;
+    });
+  };
+
+  const handleRefreshRecommendations = () => {
+    // Clear viewed posts when explicitly refreshing
+    setViewedPostIds([]);
+    // Force reload recommendations
+    hasFetchedRef.current = false;
+    isFirstMount = true;
+    setLoading(true);
+    // Increment refresh trigger to force effect to run
+    setRefreshTrigger(prev => prev + 1);
   };
 
   // Helper function to get human-readable recommendation reason
@@ -120,7 +198,7 @@ export default function DiscoverFeed() {
               ))}
               <div className="text-center py-4">
                 <button 
-                  onClick={() => setViewedPostIds([])} 
+                  onClick={handleRefreshRecommendations} 
                   className="text-blue-500 hover:text-blue-700"
                 >
                   Refresh recommendations
