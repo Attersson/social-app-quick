@@ -256,6 +256,114 @@ class Neo4jService {
       await session.close();
     }
   }
+
+  // Get recommended users based on social connections
+  async getRecommendedUsers(userId: string, limit: number = 10): Promise<{id: string, score: number, reason: string}[]> {
+    const session = await this.getSession();
+    try {
+      // Find friends of friends with weighted score
+      const result = await session.run(
+        `
+        // Friends of friends recommendation
+        MATCH (user:User {id: $userId})-[:FOLLOWS]->(friend:User)-[:FOLLOWS]->(fof:User)
+        WHERE NOT (user)-[:FOLLOWS]->(fof)
+        AND fof.id <> $userId
+        
+        // Calculate recommendation score based on number of mutual connections
+        WITH fof, COUNT(DISTINCT friend) as mutualFriends
+        
+        RETURN fof.id as id, 
+               fof.displayName as displayName,
+               mutualFriends as mutualCount,
+               mutualFriends as score,
+               'mutual_friends' as reason
+        ORDER BY score DESC, id
+        LIMIT toInteger($limit)
+        `,
+        { userId, limit }
+      );
+      
+      return result.records.map(record => ({
+        id: record.get('id'),
+        score: record.get('score').toNumber(),
+        reason: record.get('reason')
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  // Get recommended post authors based on social graph
+  async getRecommendedContentCreators(userId: string, limit: number = 20): Promise<{id: string, score: number, reason: string}[]> {
+    const session = await this.getSession();
+    try {
+      // Combined query for different types of social recommendations
+      const result = await session.run(
+        `
+        // Find content creators followed by people user follows (second-degree connections)
+        MATCH (user:User {id: $userId})-[:FOLLOWS]->(friend:User)-[:FOLLOWS]->(contentCreator:User)
+        WHERE NOT (user)-[:FOLLOWS]->(contentCreator)
+        AND contentCreator.id <> $userId
+        
+        WITH contentCreator, count(DISTINCT friend) as commonFollowers, 'followed_by_friends' as reason
+        
+        RETURN contentCreator.id as id,
+               commonFollowers as score,
+               reason
+        
+        UNION
+        
+        // Find popular creators among user's extended network
+        MATCH (user:User {id: $userId})-[:FOLLOWS]->(:User)<-[:FOLLOWS]-(mutualFollower:User)-[:FOLLOWS]->(popularCreator:User)
+        WHERE NOT (user)-[:FOLLOWS]->(popularCreator)
+        AND popularCreator.id <> $userId
+        
+        WITH popularCreator, count(DISTINCT mutualFollower) as sharedFollowers, 'popular_in_network' as reason
+        
+        RETURN popularCreator.id as id,
+               sharedFollowers as score,
+               reason
+        
+        ORDER BY score DESC, id
+        LIMIT toInteger($limit)
+        `,
+        { userId, limit }
+      );
+      
+      return result.records.map(record => ({
+        id: record.get('id'),
+        score: record.get('score').toNumber(),
+        reason: record.get('reason')
+      }));
+    } finally {
+      await session.close();
+    }
+  }
+
+  // Get social distance between two users (for content relevance)
+  async getSocialDistance(userId: string, otherUserId: string): Promise<number> {
+    if (userId === otherUserId) return 0;
+    
+    const session = await this.getSession();
+    try {
+      // Find shortest path between users up to distance 3
+      const result = await session.run(
+        `
+        MATCH path = shortestPath((user:User {id: $userId})-[:FOLLOWS*..3]->(other:User {id: $otherUserId}))
+        RETURN length(path) as distance
+        `,
+        { userId, otherUserId }
+      );
+      
+      if (result.records.length === 0) {
+        return Infinity; // No path found within 3 hops
+      }
+      
+      return result.records[0].get('distance').toNumber();
+    } finally {
+      await session.close();
+    }
+  }
 }
 
 export const neo4jService = new Neo4jService(); 

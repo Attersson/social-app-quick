@@ -1,5 +1,5 @@
 import { createContext, useContext, useEffect, useState } from 'react';
-import { useAuth } from './AuthContext';
+import { User } from 'firebase/auth';
 import { Notification } from '../types/Notification';
 import {
   collection,
@@ -29,8 +29,7 @@ interface NotificationsContextType {
 
 const NotificationsContext = createContext<NotificationsContextType | undefined>(undefined);
 
-export function NotificationsProvider({ children }: { children: React.ReactNode }) {
-  const { user } = useAuth();
+export function NotificationsProvider({ children, user }: { children: React.ReactNode, user: User | null }) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
 
   // Request push notification permission when user logs in
